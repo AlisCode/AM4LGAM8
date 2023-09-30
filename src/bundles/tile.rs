@@ -27,9 +27,9 @@ pub fn spawn_tile_type_bundle(commands: &mut Commands, tile_type: TileType, x: i
 
 fn spawn_coin(commands: &mut Commands, x: i32, y: i32, value: CoinValue) {
     let color = match value {
-        CoinValue::One => Color::LIME_GREEN,
+        CoinValue::One => Color::GREEN,
         CoinValue::Two => Color::RED,
-        CoinValue::Four => Color::YELLOW_GREEN,
+        CoinValue::Four => Color::BLUE,
         CoinValue::Eight => Color::YELLOW,
     };
 

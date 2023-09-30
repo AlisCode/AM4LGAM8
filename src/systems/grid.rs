@@ -5,6 +5,7 @@ use crate::{
     constants::GRID_SIZE,
     game::{
         grid::{GridCoordinates, MoveTileEvent, TileGrid},
+        moves::CombineEvent,
         tile::TileType,
     },
 };
@@ -24,9 +25,10 @@ pub fn sync_tile_grid(
     mut tile_grid: ResMut<TileGrid>,
     newly_spawned_tiles: Query<(&TileType, &GridCoordinates), Added<GridCoordinates>>,
     mut move_tile_event_rx: EventReader<MoveTileEvent>,
+    mut combine_event_rx: EventReader<CombineEvent>,
 ) {
-    let events: Vec<_> = move_tile_event_rx.iter().collect();
-    tile_grid.handle_move_tile_events(events.into_iter());
+    tile_grid.handle_move_tile_events(move_tile_event_rx.iter());
+    tile_grid.handle_combine_events(combine_event_rx.iter());
     for (tile_type, coords) in newly_spawned_tiles.iter() {
         tile_grid.insert(coords.clone(), *tile_type);
     }

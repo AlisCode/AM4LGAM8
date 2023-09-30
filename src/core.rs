@@ -1,7 +1,7 @@
 use crate::{
     game::{
         grid::{MoveTileEvent, TileGrid},
-        moves::ValidMoveEvent,
+        moves::{CombineEvent, ValidMoveEvent},
     },
     systems::{self, movables::RequestMoveEvent},
 };
@@ -14,6 +14,7 @@ impl GamePlugin {
         app.add_event::<RequestMoveEvent>()
             .add_event::<ValidMoveEvent>()
             .add_event::<MoveTileEvent>()
+            .add_event::<CombineEvent>()
             .insert_resource(TileGrid::default());
     }
 
@@ -26,7 +27,8 @@ impl GamePlugin {
     fn update_systems(app: &mut App) {
         app.add_systems(PreUpdate, systems::grid::sync_tile_grid);
         app.add_systems(Update, systems::tiles::handle_requested_move_events)
-            .add_systems(Update, systems::tiles::handle_valid_move_events);
+            .add_systems(Update, systems::tiles::handle_valid_move_events)
+            .add_systems(Update, systems::tiles::handle_combine_events);
     }
 }
 

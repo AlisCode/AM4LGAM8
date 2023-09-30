@@ -1,6 +1,9 @@
 use bevy::prelude::Event;
 
-use super::grid::{GridCoordinates, TileGrid};
+use super::{
+    grid::{GridCoordinates, TileGrid},
+    tile::{CombinationResult, TileType},
+};
 
 // Events
 
@@ -10,9 +13,17 @@ pub struct ValidMoveEvent {
     pub move_direction: MoveDirection,
 }
 
+#[derive(Debug, PartialEq, Eq, Event)]
+pub struct CombineEvent {
+    pub source: GridCoordinates,
+    pub target: GridCoordinates,
+    pub resulting_type: Option<TileType>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct ValidEvents {
     pub moves: Vec<ValidMoveEvent>,
+    pub combines: Vec<CombineEvent>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -36,7 +47,7 @@ pub enum CanMoveResult {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum CanCombineResult {
-    Yes,
+    Yes(CombinationResult),
     No,
 }
 
@@ -56,12 +67,22 @@ impl ValidatedEventQueue {
     ) -> Self {
         let mut valid_events = ValidEvents {
             moves: Vec::default(),
+            combines: Vec::default(),
         };
         for coords in candidate_coords {
             let can_combine_result = tile_grid.can_combine_tile(&coords, move_direction);
             match can_combine_result {
-                CanCombineResult::Yes => {
-                    // TODO: Push combine event
+                CanCombineResult::Yes(result) => {
+                    match result {
+                        CombinationResult::MergeTilesInto(resulting_type) => {
+                            let target = coords.coords_after_move(move_direction);
+                            valid_events.combines.push(CombineEvent {
+                                source: coords,
+                                target,
+                                resulting_type: Some(resulting_type),
+                            });
+                        }
+                    }
                     return ValidatedEventQueue::ValidMove(valid_events);
                 }
                 CanCombineResult::No => {
@@ -156,7 +177,7 @@ pub mod tests {
     }
 
     #[test]
-    fn should_validate_move() {
+    fn should_validate_moves() {
         let mut tile_grid = TileGrid::default();
         tile_grid.insert(
             GridCoordinates { x: 0, y: 0 },
@@ -190,6 +211,7 @@ pub mod tests {
                         coords: GridCoordinates { x: 1, y: 0 },
                     }
                 ],
+                combines: vec![],
             }),
         );
     }

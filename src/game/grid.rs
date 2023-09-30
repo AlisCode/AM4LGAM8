@@ -4,7 +4,7 @@ use bevy::{
 };
 
 use super::{
-    moves::{CanCombineResult, CanMoveResult, MoveDirection},
+    moves::{CanCombineResult, CanMoveResult, CombineEvent, MoveDirection},
     tile::TileType,
 };
 
@@ -14,6 +14,18 @@ use super::{
 pub struct GridCoordinates {
     pub x: i32,
     pub y: i32,
+}
+
+impl GridCoordinates {
+    pub fn coords_after_move(&self, dir: MoveDirection) -> GridCoordinates {
+        let GridCoordinates { x, y } = self;
+        match dir {
+            MoveDirection::Left => GridCoordinates { x: x - 1, y: *y },
+            MoveDirection::Right => GridCoordinates { x: x + 1, y: *y },
+            MoveDirection::Up => GridCoordinates { x: *x, y: y + 1 },
+            MoveDirection::Down => GridCoordinates { x: *x, y: y - 1 },
+        }
+    }
 }
 
 // Events
@@ -31,14 +43,7 @@ pub struct TileGrid(HashMap<GridCoordinates, TileType>);
 
 impl TileGrid {
     pub fn can_move_tile(&self, at_coords: &GridCoordinates, dir: MoveDirection) -> CanMoveResult {
-        let GridCoordinates { x, y } = at_coords;
-        let target_coords = match dir {
-            MoveDirection::Left => GridCoordinates { x: x - 1, y: *y },
-            MoveDirection::Right => GridCoordinates { x: x + 1, y: *y },
-            MoveDirection::Up => GridCoordinates { x: *x, y: y + 1 },
-            MoveDirection::Down => GridCoordinates { x: *x, y: y - 1 },
-        };
-
+        let target_coords = at_coords.coords_after_move(dir);
         if let Some(tile_type) = self.0.get(&target_coords) {
             if !tile_type.is_movable() {
                 return CanMoveResult::No;
@@ -54,18 +59,12 @@ impl TileGrid {
         at_coords: &GridCoordinates,
         dir: MoveDirection,
     ) -> CanCombineResult {
-        let GridCoordinates { x, y } = at_coords;
         let src_type = self.0.get(at_coords).expect("Failed to find source");
-        let target_coords = match dir {
-            MoveDirection::Left => GridCoordinates { x: x - 1, y: *y },
-            MoveDirection::Right => GridCoordinates { x: x + 1, y: *y },
-            MoveDirection::Up => GridCoordinates { x: *x, y: y + 1 },
-            MoveDirection::Down => GridCoordinates { x: *x, y: y - 1 },
-        };
+        let target_coords = at_coords.coords_after_move(dir);
 
         if let Some(tile_type) = self.0.get(&target_coords) {
-            if src_type.can_combine_with(tile_type) {
-                return CanCombineResult::Yes;
+            if let Some(result) = src_type.try_combine_with(tile_type) {
+                return CanCombineResult::Yes(result);
             }
             return CanCombineResult::No;
         }
@@ -90,8 +89,41 @@ impl TileGrid {
         }
     }
 
+    pub fn handle_combine_events<'a, I: Iterator<Item = &'a CombineEvent>>(&mut self, events: I) {
+        let mut deletions = Vec::default();
+        let mut maybe_insertions = Vec::default();
+        for event in events {
+            let CombineEvent {
+                source,
+                target,
+                resulting_type,
+            } = event;
+            deletions.push(source);
+            deletions.push(target);
+            maybe_insertions.push((target.clone(), resulting_type.clone()));
+        }
+
+        for deletion in deletions {
+            self.0.remove(deletion);
+        }
+        for (coords, maybe_tile_type) in maybe_insertions {
+            self.maybe_insert(coords, maybe_tile_type);
+        }
+    }
+
     pub fn insert(&mut self, coords: GridCoordinates, tile_type: TileType) -> Option<TileType> {
         self.0.insert(coords, tile_type)
+    }
+
+    pub fn maybe_insert(
+        &mut self,
+        coords: GridCoordinates,
+        maybe_tile_type: Option<TileType>,
+    ) -> Option<TileType> {
+        if let Some(tile_type) = maybe_tile_type {
+            return self.insert(coords, tile_type);
+        }
+        self.0.remove(&coords)
     }
 
     pub fn get(&self, coords: &GridCoordinates) -> Option<&TileType> {
@@ -103,7 +135,7 @@ impl TileGrid {
 pub mod tests {
     use crate::game::{
         grid::{GridCoordinates, TileGrid},
-        moves::{CanMoveResult, MoveDirection},
+        moves::{CanMoveResult, CombineEvent, MoveDirection},
         tile::{CoinValue, TileType},
     };
 
@@ -187,6 +219,47 @@ pub mod tests {
         assert_eq!(
             tile_grid.can_move_tile(&GridCoordinates { x: 0, y: 0 }, MoveDirection::Down),
             CanMoveResult::Yes
+        );
+    }
+
+    #[test]
+    fn should_maybe_insert_tile() {
+        let mut tile_grid = TileGrid::default();
+        tile_grid.insert(GridCoordinates { x: 0, y: 0 }, TileType::Wall);
+
+        tile_grid.maybe_insert(GridCoordinates { x: 1, y: 0 }, Some(TileType::Wall));
+        assert_eq!(
+            tile_grid.get(&GridCoordinates { x: 1, y: 0 }),
+            Some(&TileType::Wall)
+        );
+
+        tile_grid.maybe_insert(GridCoordinates { x: 1, y: 0 }, None);
+        assert_eq!(tile_grid.get(&GridCoordinates { x: 1, y: 0 }), None);
+    }
+
+    #[test]
+    fn should_combine_coin_tiles() {
+        let mut tile_grid = TileGrid::default();
+        tile_grid.insert(
+            GridCoordinates { x: 0, y: 0 },
+            TileType::Coin(CoinValue::One),
+        );
+        tile_grid.insert(
+            GridCoordinates { x: 1, y: 0 },
+            TileType::Coin(CoinValue::One),
+        );
+
+        let events = vec![CombineEvent {
+            source: GridCoordinates { x: 0, y: 0 },
+            target: GridCoordinates { x: 1, y: 0 },
+            resulting_type: Some(TileType::Coin(CoinValue::Two)),
+        }];
+        tile_grid.handle_combine_events(events.iter());
+
+        assert_eq!(tile_grid.get(&GridCoordinates { x: 0, y: 0 }), None);
+        assert_eq!(
+            tile_grid.get(&GridCoordinates { x: 1, y: 0 }),
+            Some(&TileType::Coin(CoinValue::Two))
         );
     }
 }

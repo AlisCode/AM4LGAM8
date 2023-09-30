@@ -1,13 +1,15 @@
 use bevy::{
-    prelude::{EventReader, EventWriter, Query, Res, Transform},
-    utils::HashMap,
+    ecs::system::Despawn,
+    prelude::{Commands, Entity, EventReader, EventWriter, Query, Res, Transform},
+    utils::{HashMap, HashSet},
 };
 
 use crate::{
+    bundles::tile::spawn_tile_type_bundle,
     constants::{GRID_SIZE, TILE_SIZE},
     game::{
         grid::{GridCoordinates, MoveTileEvent, TileGrid},
-        moves::{MoveDirection, ValidMoveEvent, ValidatedEventQueue},
+        moves::{CombineEvent, MoveDirection, ValidMoveEvent, ValidatedEventQueue},
         tile::TileType,
     },
 };
@@ -18,6 +20,7 @@ use super::movables::RequestMoveEvent;
 pub fn handle_requested_move_events(
     mut requested_event_rx: EventReader<RequestMoveEvent>,
     mut valid_move_event_tx: EventWriter<ValidMoveEvent>,
+    mut combine_event_tx: EventWriter<CombineEvent>,
     tile_grid: Res<TileGrid>,
 ) {
     for move_event in requested_event_rx.iter() {
@@ -63,6 +66,7 @@ pub fn handle_requested_move_events(
             ValidatedEventQueue::InvalidMove => (),
             ValidatedEventQueue::ValidMove(events) => {
                 valid_move_event_tx.send_batch(events.moves);
+                combine_event_tx.send_batch(events.combines);
             }
         }
     }
@@ -106,5 +110,40 @@ pub fn handle_valid_move_events(
                 target: coords.clone(),
             });
         }
+    }
+}
+
+pub fn handle_combine_events(
+    mut commands: Commands,
+    mut combine_event_rx: EventReader<CombineEvent>,
+    query: Query<(Entity, &GridCoordinates)>,
+) {
+    let mut grid_coords_to_delete: HashSet<&GridCoordinates> = HashSet::default();
+    let mut tiles_to_spawn: Vec<(GridCoordinates, TileType)> = Vec::default();
+    for event in combine_event_rx.iter() {
+        let CombineEvent {
+            source,
+            target,
+            resulting_type,
+        } = event;
+        grid_coords_to_delete.extend(vec![source, target]);
+        if let Some(tile_type) = resulting_type {
+            tiles_to_spawn.push((target.clone(), tile_type.clone()));
+        }
+    }
+
+    // Despawns tiles that have been combined
+    // TODO: Animate
+    for despawn_command in query.iter().filter_map(|(entity, grid_coords)| {
+        grid_coords_to_delete
+            .contains(grid_coords)
+            .then(|| Despawn { entity })
+    }) {
+        commands.add(despawn_command);
+    }
+
+    // Spawn tiles issued from combinations
+    for (coords, tile_type) in tiles_to_spawn {
+        spawn_tile_type_bundle(&mut commands, tile_type, coords.x, coords.y);
     }
 }
