@@ -1,10 +1,10 @@
 use crate::{
     constants::TILE_SIZE,
-    systems::{
-        self,
+    game::{
         grid::GridCoordinates,
-        tiles::{CoinValue, TileType},
+        tile::{CoinValue, TileType},
     },
+    systems::{self},
 };
 use bevy::{
     prelude::{Bundle, Color, Commands, Rect, Transform, Vec2, Vec3},

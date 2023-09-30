@@ -1,15 +1,7 @@
 use bevy::prelude::{Component, Entity, Event, EventWriter, Query};
 use bevy_mod_picking::prelude::{DragEnd, Listener, On, Pointer};
 
-use super::grid::GridCoordinates;
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum MoveDirection {
-    Up,
-    Down,
-    Left,
-    Right,
-}
+use crate::game::{grid::GridCoordinates, moves::MoveDirection};
 
 #[derive(Debug, Event)]
 pub struct RequestMoveEvent {

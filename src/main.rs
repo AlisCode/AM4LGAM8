@@ -2,8 +2,9 @@ use bevy::prelude::{App, DefaultPlugins, PluginGroup};
 use bevy_mod_picking::{prelude::DebugPickingPlugin, DefaultPickingPlugins};
 
 mod bundles;
-mod constants;
+pub mod constants;
 mod core;
+pub mod game;
 mod systems;
 
 fn main() {

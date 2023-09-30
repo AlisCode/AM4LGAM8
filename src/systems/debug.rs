@@ -2,7 +2,7 @@ use bevy::prelude::Commands;
 
 use crate::{
     bundles::tile::spawn_tile_type_bundle,
-    systems::tiles::{CoinValue, TileType},
+    game::tile::{CoinValue, TileType},
 };
 
 pub fn setup_debug(mut commands: Commands) {
