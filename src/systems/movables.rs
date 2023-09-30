@@ -13,8 +13,6 @@ pub enum MoveDirection {
 
 #[derive(Debug, Event)]
 pub struct RequestMoveEvent {
-    /// Entity that triggered the event
-    pub source: Entity,
     pub move_direction: MoveDirection,
     pub source_coords: GridCoordinates,
 }
@@ -57,7 +55,6 @@ fn handle_pointer_drag_end(
         .expect("Failed to find event source");
 
     move_event_tx.send(RequestMoveEvent {
-        source: pointer_event.target,
         move_direction,
         source_coords,
     });

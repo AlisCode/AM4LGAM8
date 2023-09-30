@@ -1,7 +1,6 @@
 use bevy::{
     prelude::{
-        Added, Component, Entity, Event, EventReader, EventWriter, Query, Res, ResMut, Resource,
-        Transform,
+        Added, Component, Event, EventReader, EventWriter, Query, Res, ResMut, Resource, Transform,
     },
     utils::HashMap,
 };
@@ -22,7 +21,7 @@ pub enum CoinValue {
     Eight,
 }
 
-#[derive(Debug, Clone, Copy, Component)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
 pub enum TileType {
     Coin(CoinValue),
     Wall,
@@ -36,31 +35,33 @@ impl TileType {
             TileType::Coin(_) => true,
         }
     }
+
+    pub fn can_combine_with(&self, other: &TileType) -> bool {
+        match (self, other) {
+            (TileType::Coin(CoinValue::One), TileType::Coin(CoinValue::One)) => true,
+            (TileType::Coin(CoinValue::Two), TileType::Coin(CoinValue::Two)) => true,
+            (TileType::Coin(CoinValue::Four), TileType::Coin(CoinValue::Four)) => true,
+            (TileType::Coin(CoinValue::Eight), TileType::Coin(CoinValue::Eight)) => true,
+            (TileType::Coin(_), TileType::Coin(_) | TileType::Wall) => false,
+            (TileType::Wall, TileType::Coin(_) | TileType::Wall) => false,
+        }
+    }
 }
 
-#[derive(Debug)]
-pub enum PlayerMoveAction {
-    MoveTile,
-    //CombineTile(GridCoordinates),
-}
-
-#[derive(Debug, Event)]
+#[derive(Debug, PartialEq, Eq, Event)]
 pub struct ValidMoveEvent {
-    source: Entity,
+    coords: GridCoordinates,
     move_direction: MoveDirection,
-    move_action: PlayerMoveAction,
 }
 
 /// Validates incoming RequestMoveEvent into ValidMoveEvent
 pub fn handle_requested_move_events(
     mut requested_event_rx: EventReader<RequestMoveEvent>,
-    mut valid_event_tx: EventWriter<ValidMoveEvent>,
+    mut valid_move_event_tx: EventWriter<ValidMoveEvent>,
     tile_grid: Res<TileGrid>,
 ) {
     for move_event in requested_event_rx.iter() {
-        dbg!(&move_event);
         let RequestMoveEvent {
-            source,
             move_direction,
             source_coords,
         } = move_event;
@@ -86,6 +87,7 @@ pub fn handle_requested_move_events(
                 })
                 .collect(),
             MoveDirection::Down => (-1..=source_coords.y)
+                .rev()
                 .map(|y| GridCoordinates {
                     x: source_coords.x,
                     y,
@@ -93,63 +95,111 @@ pub fn handle_requested_move_events(
                 .collect(),
         };
 
-        if check_can_move_tile_on_grid(&tile_grid, &candidate_coords, *move_direction) {
-            valid_event_tx.send(ValidMoveEvent {
-                source: *source,
-                move_direction: *move_direction,
-                move_action: PlayerMoveAction::MoveTile,
-            });
+        let validated_event_queue =
+            ValidatedEventQueue::validate_move(&tile_grid, candidate_coords, *move_direction);
+
+        match validated_event_queue {
+            ValidatedEventQueue::InvalidMove => (),
+            ValidatedEventQueue::ValidMove(events) => {
+                valid_move_event_tx.send_batch(events.moves);
+            }
         }
     }
 }
 
-fn check_can_move_tile_on_grid(
-    tile_grid: &TileGrid,
-    candidate_coords: &[GridCoordinates],
-    move_direction: MoveDirection,
-) -> bool {
-    for coord in candidate_coords {
-        let can_move_result = tile_grid.can_move_tile(&coord, move_direction);
-        match can_move_result {
-            CanMoveResult::Yes => return true,
-            CanMoveResult::No => return false,
-            CanMoveResult::YesIfNextCanMove => (),
+#[derive(Debug, PartialEq, Eq)]
+struct ValidEvents {
+    moves: Vec<ValidMoveEvent>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ValidatedEventQueue {
+    InvalidMove,
+    ValidMove(ValidEvents),
+}
+
+impl ValidatedEventQueue {
+    pub fn validate_move(
+        tile_grid: &TileGrid,
+        candidate_coords: Vec<GridCoordinates>,
+        move_direction: MoveDirection,
+    ) -> Self {
+        let mut valid_events = ValidEvents {
+            moves: Vec::default(),
+        };
+        for coords in candidate_coords {
+            let can_combine_result = tile_grid.can_combine_tile(&coords, move_direction);
+            match can_combine_result {
+                CanCombineResult::Yes => {
+                    // TODO: Push combine event
+                    return ValidatedEventQueue::ValidMove(valid_events);
+                }
+                CanCombineResult::No => {
+                    let can_move_result = tile_grid.can_move_tile(&coords, move_direction);
+                    match can_move_result {
+                        CanMoveResult::Yes => {
+                            let valid_move_event = ValidMoveEvent {
+                                coords,
+                                move_direction,
+                            };
+                            valid_events.moves.push(valid_move_event);
+                            return ValidatedEventQueue::ValidMove(valid_events);
+                        }
+                        CanMoveResult::No => return ValidatedEventQueue::InvalidMove,
+                        CanMoveResult::YesIfNextCanMove => {
+                            // Otherwise we add the valid Move event and keep checking the
+                            // move with the next candidate
+                            let valid_move_event = ValidMoveEvent {
+                                coords,
+                                move_direction,
+                            };
+                            valid_events.moves.push(valid_move_event);
+                        }
+                    }
+                }
+            }
         }
+
+        ValidatedEventQueue::InvalidMove
     }
-    panic!("The map is supposed to be closed");
 }
 
 pub fn handle_valid_move_events(
     mut valid_event_rx: EventReader<ValidMoveEvent>,
     mut move_tile_event_tx: EventWriter<MoveTileEvent>,
-    mut query: Query<(Entity, &mut GridCoordinates, &mut Transform, &TileType)>,
+    mut query: Query<(&mut GridCoordinates, &mut Transform, &TileType)>,
 ) {
-    for move_event in valid_event_rx.iter() {
-        for (entity, mut coords, mut transform, _tile_type) in query.iter_mut() {
-            if entity != move_event.source {
-                continue;
-            }
+    let mut old_coords_to_new_coords: HashMap<GridCoordinates, GridCoordinates> = valid_event_rx
+        .iter()
+        .map(
+            |ValidMoveEvent {
+                 coords,
+                 move_direction,
+             }| {
+                let mut new_coords = coords.clone();
+                match move_direction {
+                    MoveDirection::Up => new_coords.y += 1,
+                    MoveDirection::Down => new_coords.y -= 1,
+                    MoveDirection::Left => new_coords.x -= 1,
+                    MoveDirection::Right => new_coords.x += 1,
+                };
+                (coords.clone(), new_coords)
+            },
+        )
+        .collect();
+    for (mut coords, mut transform, _tile_type) in query.iter_mut() {
+        if let Some(new_coords) = old_coords_to_new_coords.remove(&*coords) {
+            let old_coords = coords.clone();
+            *coords = new_coords;
 
-            match &move_event.move_action {
-                PlayerMoveAction::MoveTile => {
-                    let old_coords = coords.clone();
-                    match move_event.move_direction {
-                        MoveDirection::Up => coords.y += 1,
-                        MoveDirection::Down => coords.y -= 1,
-                        MoveDirection::Left => coords.x -= 1,
-                        MoveDirection::Right => coords.x += 1,
-                    }
-                    // TODO: Animate
-                    transform.translation.x = coords.x as f32 * TILE_SIZE;
-                    transform.translation.y = coords.y as f32 * TILE_SIZE;
+            // TODO: Animate
+            transform.translation.x = coords.x as f32 * TILE_SIZE;
+            transform.translation.y = coords.y as f32 * TILE_SIZE;
 
-                    dbg!("sending move tile event");
-                    move_tile_event_tx.send(MoveTileEvent {
-                        source: old_coords,
-                        target: coords.clone(),
-                    });
-                }
-            }
+            move_tile_event_tx.send(MoveTileEvent {
+                source: old_coords,
+                target: coords.clone(),
+            });
         }
     }
 }
@@ -165,6 +215,12 @@ pub enum CanMoveResult {
     // We need to check if this can move
     YesIfNextCanMove,
     // We're colliding with something that is unmovable
+    No,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum CanCombineResult {
+    Yes,
     No,
 }
 
@@ -187,6 +243,44 @@ impl TileGrid {
 
         CanMoveResult::Yes
     }
+
+    fn can_combine_tile(
+        &self,
+        at_coords: &GridCoordinates,
+        dir: MoveDirection,
+    ) -> CanCombineResult {
+        let GridCoordinates { x, y } = at_coords;
+        let src_type = self.0.get(at_coords).expect("Failed to find source");
+        let target_coords = match dir {
+            MoveDirection::Left => GridCoordinates { x: x - 1, y: *y },
+            MoveDirection::Right => GridCoordinates { x: x + 1, y: *y },
+            MoveDirection::Up => GridCoordinates { x: *x, y: y + 1 },
+            MoveDirection::Down => GridCoordinates { x: *x, y: y - 1 },
+        };
+
+        if let Some(tile_type) = self.0.get(&target_coords) {
+            if src_type.can_combine_with(tile_type) {
+                return CanCombineResult::Yes;
+            }
+            return CanCombineResult::No;
+        }
+        CanCombineResult::No
+    }
+
+    fn handle_move_tile_events<'a, I: Iterator<Item = &'a MoveTileEvent>>(&mut self, events: I) {
+        let new_tiles: Vec<(GridCoordinates, TileType)> = events
+            .map(|MoveTileEvent { source, target }| {
+                let src_type = self
+                    .0
+                    .remove(source)
+                    .expect("Failed to find source in grid");
+                (target.clone(), src_type)
+            })
+            .collect();
+        for (coord, new_type) in new_tiles {
+            self.0.insert(coord, new_type);
+        }
+    }
 }
 
 pub fn sync_tile_grid(
@@ -194,13 +288,9 @@ pub fn sync_tile_grid(
     newly_spawned_tiles: Query<(&TileType, &GridCoordinates), Added<GridCoordinates>>,
     mut move_tile_event_rx: EventReader<MoveTileEvent>,
 ) {
-    for event in move_tile_event_rx.iter() {
-        let src_type = tile_grid
-            .0
-            .remove(&event.source)
-            .expect("Failed to find source in grid");
-        tile_grid.0.insert(event.target.clone(), src_type);
-    }
+    let events: Vec<_> = move_tile_event_rx.iter().collect();
+    dbg!(&events);
+    tile_grid.handle_move_tile_events(events.into_iter());
     for (tile_type, coords) in newly_spawned_tiles.iter() {
         tile_grid.0.insert(coords.clone(), *tile_type);
     }
@@ -208,8 +298,12 @@ pub fn sync_tile_grid(
 
 #[cfg(test)]
 pub mod tests {
-    use super::{CoinValue, TileGrid, TileType};
-    use crate::systems::{grid::GridCoordinates, movables::MoveDirection, tiles::CanMoveResult};
+    use super::{CoinValue, TileGrid, TileType, ValidatedEventQueue};
+    use crate::systems::{
+        grid::{GridCoordinates, MoveTileEvent},
+        movables::MoveDirection,
+        tiles::{CanMoveResult, ValidEvents, ValidMoveEvent},
+    };
 
     #[test]
     fn can_move_tile_when_empty() {
@@ -293,6 +387,98 @@ pub mod tests {
         assert_eq!(
             tile_grid.can_move_tile(&GridCoordinates { x: 0, y: 0 }, MoveDirection::Down),
             CanMoveResult::Yes
+        );
+    }
+
+    #[test]
+    fn should_move_tile() {
+        let mut tile_grid = TileGrid::default();
+        tile_grid.0.insert(
+            GridCoordinates { x: 0, y: 0 },
+            TileType::Coin(CoinValue::One),
+        );
+
+        let move_events = vec![MoveTileEvent {
+            source: GridCoordinates { x: 0, y: 0 },
+            target: GridCoordinates { x: 1, y: 0 },
+        }];
+        tile_grid.handle_move_tile_events(move_events.iter());
+
+        assert!(!tile_grid.0.contains_key(&GridCoordinates { x: 0, y: 0 }));
+        assert!(tile_grid.0.contains_key(&GridCoordinates { x: 1, y: 0 }));
+    }
+
+    #[test]
+    fn should_move_many_tiles() {
+        let mut tile_grid = TileGrid::default();
+        tile_grid.0.insert(
+            GridCoordinates { x: 0, y: 0 },
+            TileType::Coin(CoinValue::One),
+        );
+        tile_grid.0.insert(
+            GridCoordinates { x: 1, y: 0 },
+            TileType::Coin(CoinValue::Two),
+        );
+
+        let move_events = vec![
+            MoveTileEvent {
+                source: GridCoordinates { x: 0, y: 0 },
+                target: GridCoordinates { x: 1, y: 0 },
+            },
+            MoveTileEvent {
+                source: GridCoordinates { x: 1, y: 0 },
+                target: GridCoordinates { x: 2, y: 0 },
+            },
+        ];
+        tile_grid.handle_move_tile_events(move_events.iter());
+
+        assert!(!tile_grid.0.contains_key(&GridCoordinates { x: 0, y: 0 }));
+        assert_eq!(
+            tile_grid.0[&GridCoordinates { x: 1, y: 0 }],
+            TileType::Coin(CoinValue::One),
+        );
+        assert_eq!(
+            tile_grid.0[&GridCoordinates { x: 2, y: 0 }],
+            TileType::Coin(CoinValue::Two),
+        );
+    }
+
+    #[test]
+    fn should_validate_move() {
+        let mut tile_grid = TileGrid::default();
+        tile_grid.0.insert(
+            GridCoordinates { x: 0, y: 0 },
+            TileType::Coin(CoinValue::One),
+        );
+        tile_grid.0.insert(
+            GridCoordinates { x: 1, y: 0 },
+            TileType::Coin(CoinValue::Two),
+        );
+
+        let validated_event_queue = ValidatedEventQueue::validate_move(
+            &tile_grid,
+            vec![
+                GridCoordinates { x: 0, y: 0 },
+                GridCoordinates { x: 1, y: 0 },
+                GridCoordinates { x: 2, y: 0 },
+                GridCoordinates { x: 3, y: 0 },
+            ],
+            MoveDirection::Right,
+        );
+        assert_eq!(
+            &validated_event_queue,
+            &ValidatedEventQueue::ValidMove(ValidEvents {
+                moves: vec![
+                    ValidMoveEvent {
+                        move_direction: MoveDirection::Right,
+                        coords: GridCoordinates { x: 0, y: 0 },
+                    },
+                    ValidMoveEvent {
+                        move_direction: MoveDirection::Right,
+                        coords: GridCoordinates { x: 1, y: 0 },
+                    }
+                ],
+            }),
         );
     }
 }

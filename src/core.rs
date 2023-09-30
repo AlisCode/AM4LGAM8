@@ -4,7 +4,7 @@ use crate::systems::{
     movables::RequestMoveEvent,
     tiles::{TileGrid, ValidMoveEvent},
 };
-use bevy::prelude::{App, Plugin, Startup, Update};
+use bevy::prelude::{App, Plugin, PreUpdate, Startup, Update};
 
 pub struct GamePlugin;
 
@@ -23,8 +23,8 @@ impl GamePlugin {
     }
 
     fn update_systems(app: &mut App) {
-        app.add_systems(Update, systems::tiles::sync_tile_grid)
-            .add_systems(Update, systems::tiles::handle_requested_move_events)
+        app.add_systems(PreUpdate, systems::tiles::sync_tile_grid);
+        app.add_systems(Update, systems::tiles::handle_requested_move_events)
             .add_systems(Update, systems::tiles::handle_valid_move_events);
     }
 }
