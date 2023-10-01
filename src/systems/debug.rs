@@ -18,30 +18,30 @@ pub fn setup_debug(mut commands: Commands, assets: Res<GameAssets>) {
         &mut commands,
         assets.tileset.clone(),
         TileType::Coin(CoinValue::One),
-        4,
+        3,
         0,
     );
     spawn_tile_type_bundle(
         &mut commands,
         assets.tileset.clone(),
         TileType::Coin(CoinValue::Two),
-        4,
+        3,
         1,
     );
     spawn_tile_type_bundle(
         &mut commands,
         assets.tileset.clone(),
         TileType::Coin(CoinValue::Four),
-        4,
+        3,
         2,
     );
     spawn_tile_type_bundle(
         &mut commands,
         assets.tileset.clone(),
         TileType::Coin(CoinValue::Eight),
-        4,
+        3,
         3,
     );
+    spawn_tile_type_bundle(&mut commands, assets.tileset.clone(), TileType::Bomb, 1, 2);
     spawn_tile_type_bundle(&mut commands, assets.tileset.clone(), TileType::Bomb, 1, 3);
-    spawn_tile_type_bundle(&mut commands, assets.tileset.clone(), TileType::Bomb, 1, 4);
 }

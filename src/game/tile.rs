@@ -1,4 +1,5 @@
 use bevy::prelude::Component;
+use rand::Rng;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[allow(dead_code)]
@@ -64,6 +65,16 @@ impl TileType {
             (TileType::Bomb, TileType::Bomb) => Some(CombinationResult::Explosion),
             (TileType::Bomb, TileType::Coin(_) | TileType::Wall) => None,
             (TileType::Wall, TileType::Coin(_) | TileType::Wall | TileType::Bomb) => None,
+        }
+    }
+
+    pub fn gen_random() -> Self {
+        let mut rng = rand::thread_rng();
+        match rng.gen_range(1..=10) {
+            1..=5 => TileType::Coin(CoinValue::One),
+            6..=7 => TileType::Coin(CoinValue::Two),
+            8..=10 => TileType::Bomb,
+            _ => panic!("range 1..=10"),
         }
     }
 }

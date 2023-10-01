@@ -4,7 +4,7 @@ use crate::{
         grid::{MoveTileEvent, TileGrid},
         moves::{ExplosionEvent, MergeTilesEvent, ValidMoveEvent},
     },
-    systems::{self, movables::RequestMoveEvent},
+    systems::{self, grid::ValidTurnEvent, movables::RequestMoveEvent},
 };
 use bevy::prelude::{in_state, App, IntoSystemConfigs, OnEnter, Plugin, PreUpdate, States, Update};
 use bevy_asset_loader::loading_state::{LoadingState, LoadingStateAppExt};
@@ -32,6 +32,7 @@ impl GamePlugin {
             .add_event::<MoveTileEvent>()
             .add_event::<MergeTilesEvent>()
             .add_event::<ExplosionEvent>()
+            .add_event::<ValidTurnEvent>()
             .insert_resource(TileGrid::default());
     }
 
@@ -59,12 +60,15 @@ impl GamePlugin {
         let handle_combine_events =
             systems::tiles::handle_combine_events.before(systems::tiles::handle_valid_move_events);
         let handle_valid_move_events = systems::tiles::handle_valid_move_events;
+        let handle_valid_turn =
+            systems::grid::spawn_new_tile_on_valid_move.after(handle_valid_move_events);
 
         let update_systems = (
             systems::tiles::handle_requested_move_events,
             handle_explosion_events,
             handle_combine_events,
             handle_valid_move_events,
+            handle_valid_turn,
         )
             .run_if(in_state(GameState::Playing));
         app.add_systems(Update, update_systems);

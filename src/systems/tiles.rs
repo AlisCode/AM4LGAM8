@@ -1,6 +1,6 @@
 use bevy::{
     ecs::system::Despawn,
-    prelude::{Commands, Entity, EventReader, EventWriter, Query, Res, Transform},
+    prelude::{Commands, Entity, EventReader, EventWriter, Query, Res, ResMut, Transform},
     utils::{HashMap, HashSet},
 };
 
@@ -17,7 +17,7 @@ use crate::{
     },
 };
 
-use super::movables::RequestMoveEvent;
+use super::{grid::ValidTurnEvent, movables::RequestMoveEvent};
 
 /// Validates incoming RequestMoveEvent into ValidMoveEvent
 pub fn handle_requested_move_events(
@@ -25,6 +25,7 @@ pub fn handle_requested_move_events(
     mut valid_move_event_tx: EventWriter<ValidMoveEvent>,
     mut combine_event_tx: EventWriter<MergeTilesEvent>,
     mut explosion_event_tx: EventWriter<ExplosionEvent>,
+    mut valid_turn_tx: EventWriter<ValidTurnEvent>,
     tile_grid: Res<TileGrid>,
 ) {
     for move_event in requested_event_rx.iter() {
@@ -72,6 +73,7 @@ pub fn handle_requested_move_events(
                 valid_move_event_tx.send_batch(events.moves);
                 combine_event_tx.send_batch(events.merges);
                 explosion_event_tx.send_batch(events.explosions);
+                valid_turn_tx.send(ValidTurnEvent);
             }
         }
     }
@@ -81,6 +83,7 @@ pub fn handle_valid_move_events(
     mut valid_event_rx: EventReader<ValidMoveEvent>,
     mut move_tile_event_tx: EventWriter<MoveTileEvent>,
     mut query: Query<(&mut GridCoordinates, &mut Transform, &TileType)>,
+    mut tile_grid: ResMut<TileGrid>,
 ) {
     // Necessary because mutating the coords as we go may have unwanted side-effects
     let mut old_coords_to_new_coords: HashMap<GridCoordinates, GridCoordinates> = valid_event_rx
@@ -101,6 +104,7 @@ pub fn handle_valid_move_events(
             },
         )
         .collect();
+    let mut events = Vec::default();
     for (mut coords, mut transform, _tile_type) in query.iter_mut() {
         if let Some(new_coords) = old_coords_to_new_coords.remove(&*coords) {
             let old_coords = coords.clone();
@@ -110,12 +114,14 @@ pub fn handle_valid_move_events(
             transform.translation.x = coords.x as f32 * TILE_SIZE;
             transform.translation.y = coords.y as f32 * TILE_SIZE;
 
-            move_tile_event_tx.send(MoveTileEvent {
+            events.push(MoveTileEvent {
                 source: old_coords,
                 target: coords.clone(),
             });
         }
     }
+    tile_grid.handle_move_tile_events(events.iter());
+    move_tile_event_tx.send_batch(events);
 }
 
 pub fn handle_combine_events(
@@ -123,10 +129,13 @@ pub fn handle_combine_events(
     mut combine_event_rx: EventReader<MergeTilesEvent>,
     query: Query<(Entity, &GridCoordinates)>,
     assets: Res<GameAssets>,
+    mut tile_grid: ResMut<TileGrid>,
 ) {
     let mut grid_coords_to_delete: HashSet<&GridCoordinates> = HashSet::default();
     let mut tiles_to_spawn: Vec<(GridCoordinates, TileType)> = Vec::default();
+    let mut events: Vec<_> = Vec::default();
     for event in combine_event_rx.iter() {
+        events.push(event.clone());
         let MergeTilesEvent {
             source,
             target,
@@ -137,6 +146,7 @@ pub fn handle_combine_events(
             tiles_to_spawn.push((target.clone(), tile_type.clone()));
         }
     }
+    tile_grid.handle_combine_events(events.iter());
 
     // Despawns tiles that have been combined
     // TODO: Animate
@@ -164,12 +174,16 @@ pub fn handle_explosion_events(
     mut commands: Commands,
     mut explosion_event_rx: EventReader<ExplosionEvent>,
     query: Query<(Entity, &GridCoordinates, &TileType)>,
+    mut tile_grid: ResMut<TileGrid>,
 ) {
     let mut grid_coords_to_delete: HashSet<GridCoordinates> = HashSet::default();
+    let mut events = Vec::default();
     for event in explosion_event_rx.iter() {
+        events.push(event.clone());
         let ExplosionEvent { target } = event;
         grid_coords_to_delete.extend(target.explosion_radius());
     }
+    tile_grid.handle_explosion_events(events.iter());
 
     for (entity, coords, tile_type) in query.iter() {
         if !grid_coords_to_delete.contains(coords) {

@@ -13,14 +13,14 @@ pub struct ValidMoveEvent {
     pub move_direction: MoveDirection,
 }
 
-#[derive(Debug, PartialEq, Eq, Event)]
+#[derive(Debug, PartialEq, Eq, Clone, Event)]
 pub struct MergeTilesEvent {
     pub source: GridCoordinates,
     pub target: GridCoordinates,
     pub resulting_type: Option<TileType>,
 }
 
-#[derive(Debug, PartialEq, Eq, Event)]
+#[derive(Debug, PartialEq, Eq, Clone, Event)]
 pub struct ExplosionEvent {
     pub target: GridCoordinates,
 }
