@@ -1,5 +1,5 @@
 use bevy::{
-    prelude::{App, ClearColor, DefaultPlugins, PluginGroup},
+    prelude::{App, ClearColor, DefaultPlugins, ImagePlugin, PluginGroup},
     window::{Window, WindowPlugin},
 };
 use bevy_mod_picking::{
@@ -19,13 +19,18 @@ mod texture_atlas_backend;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                resolution: (GAME_WINDOW_WIDTH, GAME_WINDOW_HEIGHT).into(),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        resolution: (GAME_WINDOW_WIDTH, GAME_WINDOW_HEIGHT).into(),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                })
+                // This is a pixel-art game
+                .set(ImagePlugin::default_nearest()),
+        )
         .insert_resource(ClearColor(background_color()))
         // bevy_mod_picking with hacked support for TextureAtlas
         // A big thank you to Github user focustense, saving my jam at 2AM with
