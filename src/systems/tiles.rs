@@ -22,6 +22,7 @@ use super::{
     grid::ValidTurnEvent,
     movables::RequestMoveEvent,
     ui::GameScore,
+    OnPlayingScreen,
 };
 
 /// Validates incoming RequestMoveEvent into ValidMoveEvent
@@ -217,7 +218,10 @@ pub fn handle_explosion_events(
             ExplosionResult::NoExplosion => continue,
             ExplosionResult::ScorePoints(points) => {
                 game_score.add(points);
-                commands.spawn(ExplosionBundle::new(&assets, coords.clone()));
+                commands.spawn((
+                    ExplosionBundle::new(&assets, coords.clone()),
+                    OnPlayingScreen,
+                ));
                 commands.add(Despawn { entity });
             }
         }

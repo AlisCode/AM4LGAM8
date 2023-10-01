@@ -4,7 +4,7 @@ use bevy::{
 };
 use rand::Rng;
 
-use crate::constants::GRID_SIZE;
+use crate::{constants::GRID_SIZE, game::moves::ValidatedEventQueue};
 
 use super::{
     moves::{CanCombineResult, CanMoveResult, ExplosionEvent, MergeTilesEvent, MoveDirection},
@@ -38,6 +38,25 @@ impl GridCoordinates {
             self.coords_after_move(MoveDirection::Left),
             self.coords_after_move(MoveDirection::Right),
         ]
+    }
+
+    pub fn candidate_coords_for_dir(&self, move_direction: MoveDirection) -> Vec<GridCoordinates> {
+        match move_direction {
+            MoveDirection::Left => (-1..=self.x)
+                .rev()
+                .map(|x| GridCoordinates { x, y: self.y })
+                .collect(),
+            MoveDirection::Right => (self.x..=GRID_SIZE)
+                .map(|x| GridCoordinates { x, y: self.y })
+                .collect(),
+            MoveDirection::Up => (self.y..=GRID_SIZE)
+                .map(|y| GridCoordinates { x: self.x, y })
+                .collect(),
+            MoveDirection::Down => (-1..=self.y)
+                .rev()
+                .map(|y| GridCoordinates { x: self.x, y })
+                .collect(),
+        }
     }
 }
 
@@ -191,6 +210,29 @@ impl TileGrid {
 
     pub fn get(&self, coords: &GridCoordinates) -> Option<&TileType> {
         self.grid.get(coords)
+    }
+
+    pub fn has_any_possible_moves(&self) -> bool {
+        (0..=GRID_SIZE)
+            .flat_map(move |x| (0..=GRID_SIZE).map(move |y| GridCoordinates { x, y }))
+            .any(|coords| {
+                self.has_possible_moves_for_direction(&coords, MoveDirection::Left)
+                    || self.has_possible_moves_for_direction(&coords, MoveDirection::Right)
+                    || self.has_possible_moves_for_direction(&coords, MoveDirection::Up)
+                    || self.has_possible_moves_for_direction(&coords, MoveDirection::Down)
+            })
+    }
+
+    fn has_possible_moves_for_direction(
+        &self,
+        coords: &GridCoordinates,
+        move_direction: MoveDirection,
+    ) -> bool {
+        let candidate_coords = coords.candidate_coords_for_dir(move_direction);
+        match ValidatedEventQueue::validate_move(self, candidate_coords, move_direction) {
+            ValidatedEventQueue::ValidMove(_) => true,
+            ValidatedEventQueue::InvalidMove => false,
+        }
     }
 }
 
@@ -489,5 +531,20 @@ pub mod tests {
         assert!(!tile_grid
             .unused_coordinates
             .contains(&GridCoordinates { x: 4, y: 0 }));
+    }
+
+    #[test]
+    fn has_any_possible_moves_should_work() {
+        let mut tile_grid = TileGrid::default();
+        tile_grid.insert(GridCoordinates { x: 0, y: 0 }, TileType::Bomb);
+
+        assert!(tile_grid.has_any_possible_moves());
+
+        tile_grid.insert(GridCoordinates { x: -1, y: 0 }, TileType::Wall);
+        tile_grid.insert(GridCoordinates { x: 1, y: 0 }, TileType::Wall);
+        tile_grid.insert(GridCoordinates { x: 0, y: 1 }, TileType::Wall);
+        tile_grid.insert(GridCoordinates { x: 0, y: -1 }, TileType::Wall);
+
+        assert!(!tile_grid.has_any_possible_moves());
     }
 }

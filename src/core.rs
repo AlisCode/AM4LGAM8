@@ -4,10 +4,7 @@ use crate::{
         grid::{MoveTileEvent, TileGrid},
         moves::{ExplosionEvent, MergeTilesEvent, ValidMoveEvent},
     },
-    systems::{
-        self, grid::ValidTurnEvent, movables::RequestMoveEvent, title_screen::TitleScreenEntities,
-        ui::GameScore,
-    },
+    systems::{self, grid::ValidTurnEvent, movables::RequestMoveEvent, ui::GameScore},
 };
 use bevy::prelude::{in_state, App, IntoSystemConfigs, OnEnter, Plugin, PreUpdate, States, Update};
 use bevy_asset_loader::loading_state::{LoadingState, LoadingStateAppExt};
@@ -39,8 +36,7 @@ impl GamePlugin {
             .add_event::<ExplosionEvent>()
             .add_event::<ValidTurnEvent>()
             .insert_resource(TileGrid::default())
-            .insert_resource(GameScore::default())
-            .insert_resource(TitleScreenEntities::default());
+            .insert_resource(GameScore::default());
     }
 
     fn on_enter_title_screen(app: &mut App) {
@@ -54,6 +50,20 @@ impl GamePlugin {
         app.add_systems(
             Update,
             systems::title_screen::update_ui.run_if(in_state(GameState::TitleScreen)),
+        );
+    }
+
+    fn on_enter_game_over_screen(app: &mut App) {
+        app.add_systems(
+            OnEnter(GameState::GameOver),
+            (systems::camera::setup, systems::game_over::setup),
+        );
+    }
+
+    fn on_update_game_over_screen(app: &mut App) {
+        app.add_systems(
+            Update,
+            systems::game_over::update_ui.run_if(in_state(GameState::GameOver)),
         );
     }
 
@@ -108,6 +118,8 @@ impl Plugin for GamePlugin {
         GamePlugin::resources(app);
         GamePlugin::on_enter_title_screen(app);
         GamePlugin::on_update_title_screen(app);
+        GamePlugin::on_enter_game_over_screen(app);
+        GamePlugin::on_update_game_over_screen(app);
         GamePlugin::on_enter_playing_state(app);
         GamePlugin::on_update_playing_state(app);
     }

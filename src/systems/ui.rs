@@ -12,6 +12,8 @@ use crate::{
     constants::{foreground_color, GAME_LOGIC_HEIGHT, GAME_LOGIC_WIDTH, TILE_SIZE},
 };
 
+use super::OnPlayingScreen;
+
 // Components
 
 #[derive(Component)]
@@ -43,18 +45,21 @@ pub fn reset_score(mut game_score: ResMut<GameScore>) {
 }
 
 pub fn spawn_ui(mut commands: Commands, assets: Res<GameAssets>) {
-    commands.spawn(SpriteBundle {
-        sprite: Sprite {
-            rect: Some(Rect::new(0., 0., GAME_LOGIC_WIDTH, GAME_LOGIC_HEIGHT)),
+    commands.spawn((
+        SpriteBundle {
+            sprite: Sprite {
+                rect: Some(Rect::new(0., 0., GAME_LOGIC_WIDTH, GAME_LOGIC_HEIGHT)),
+                ..Default::default()
+            },
+            texture: assets.ui.clone(),
+            transform: Transform {
+                translation: Vec3::new(TILE_SIZE * 1.5, TILE_SIZE * 1.5 - 3., -1.),
+                ..Default::default()
+            },
             ..Default::default()
         },
-        texture: assets.ui.clone(),
-        transform: Transform {
-            translation: Vec3::new(TILE_SIZE * 1.5, TILE_SIZE * 1.5 - 3., -1.),
-            ..Default::default()
-        },
-        ..Default::default()
-    });
+        OnPlayingScreen,
+    ));
 
     commands.spawn((
         TextBundle::from_section(
@@ -72,6 +77,7 @@ pub fn spawn_ui(mut commands: Commands, assets: Res<GameAssets>) {
             ..Default::default()
         }),
         ScoreLabel,
+        OnPlayingScreen,
     ));
 }
 

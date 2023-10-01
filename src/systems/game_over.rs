@@ -1,49 +1,26 @@
 use bevy::{
     prelude::{
         BuildChildren, ButtonBundle, Commands, Component, DespawnRecursive, Entity, NextState,
-        NodeBundle, Query, Rect, Res, ResMut, TextBundle, Transform, Vec3,
+        NodeBundle, Query, Res, ResMut, TextBundle,
     },
-    sprite::{Sprite, SpriteBundle},
     text::TextStyle,
-    ui::{AlignItems, Interaction, JustifyContent, PositionType, Style, Val},
+    ui::{AlignItems, FlexDirection, Interaction, JustifyContent, PositionType, Style, Val},
 };
 
 use crate::{
-    assets::GameAssets,
-    constants::{
-        background_color, foreground_color, GAME_LOGIC_HEIGHT, GAME_LOGIC_WIDTH, GRID_SIZE,
-        TILE_SIZE,
-    },
+    constants::{background_color, foreground_color},
     core::GameState,
 };
 
-#[derive(Component)]
-pub struct OnTitleScreen;
+use super::ui::GameScore;
 
 #[derive(Component)]
-pub struct PlayButton;
+pub struct OnGameOverScreen;
 
-pub fn setup(mut commands: Commands, assets: Res<GameAssets>) {
-    commands.spawn((
-        SpriteBundle {
-            sprite: Sprite {
-                rect: Some(Rect::new(0., 0., GAME_LOGIC_WIDTH, GAME_LOGIC_HEIGHT)),
-                ..Default::default()
-            },
-            transform: Transform {
-                translation: Vec3::new(
-                    TILE_SIZE * (GRID_SIZE as f32 / 2. - 0.5),
-                    TILE_SIZE * (GRID_SIZE as f32 / 2. - 0.5) - 3.,
-                    1.,
-                ),
-                ..Default::default()
-            },
-            texture: assets.title_screen.clone(),
-            ..Default::default()
-        },
-        OnTitleScreen,
-    ));
+#[derive(Component)]
+pub struct ToTitleScreenButton;
 
+pub fn setup(mut commands: Commands, score: Res<GameScore>) {
     commands
         .spawn((
             NodeBundle {
@@ -52,13 +29,30 @@ pub fn setup(mut commands: Commands, assets: Res<GameAssets>) {
                     height: Val::Percent(100.0),
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::Center,
+                    flex_direction: FlexDirection::Column,
                     ..Default::default()
                 },
                 ..Default::default()
             },
-            OnTitleScreen,
+            OnGameOverScreen,
         ))
         .with_children(|parent| {
+            parent.spawn(TextBundle::from_section(
+                "Game over!",
+                TextStyle {
+                    font_size: 40.0,
+                    color: foreground_color(),
+                    ..Default::default()
+                },
+            ));
+            parent.spawn(TextBundle::from_section(
+                format!("Your score: {}", score.get()),
+                TextStyle {
+                    font_size: 40.0,
+                    color: foreground_color(),
+                    ..Default::default()
+                },
+            ));
             parent
                 .spawn((
                     ButtonBundle {
@@ -74,11 +68,11 @@ pub fn setup(mut commands: Commands, assets: Res<GameAssets>) {
                         background_color: bevy::ui::BackgroundColor(foreground_color()),
                         ..Default::default()
                     },
-                    PlayButton,
+                    ToTitleScreenButton,
                 ))
                 .with_children(|parent| {
                     parent.spawn(TextBundle::from_section(
-                        "Play",
+                        "Exit",
                         TextStyle {
                             font_size: 40.0,
                             color: background_color(),
@@ -91,8 +85,8 @@ pub fn setup(mut commands: Commands, assets: Res<GameAssets>) {
 
 pub fn update_ui(
     mut commands: Commands,
-    query: Query<(&Interaction, &PlayButton)>,
-    entities_on_title_screen: Query<(Entity, &OnTitleScreen)>,
+    query: Query<(&Interaction, &ToTitleScreenButton)>,
+    entities_on_title_screen: Query<(Entity, &OnGameOverScreen)>,
     mut state: ResMut<NextState<GameState>>,
 ) {
     for (interaction, _play_btn) in query.iter() {
@@ -102,8 +96,8 @@ pub fn update_ui(
                     commands.add(DespawnRecursive { entity })
                 }
 
-                // Swith to play state
-                state.set(GameState::Playing);
+                // Swith to title screen
+                state.set(GameState::TitleScreen);
             }
             _ => (),
         }

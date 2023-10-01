@@ -6,7 +6,7 @@ use crate::{
         grid::GridCoordinates,
         tile::{CoinValue, TileType},
     },
-    systems::{self},
+    systems::{self, OnPlayingScreen},
 };
 use bevy::{
     prelude::{Bundle, Commands, Handle, Transform, Vec2, Vec3},
@@ -88,6 +88,7 @@ fn spawn_coin(
         TileType::Coin(value),
         PickableBundle::default(),
         systems::movables::on_pointer_drag_end_handler(),
+        OnPlayingScreen,
     ));
 }
 
@@ -111,6 +112,7 @@ fn spawn_bomb(commands: &mut Commands, tileset: Handle<TextureAtlas>, x: i32, y:
         PickableBundle::default(),
         systems::movables::on_pointer_drag_end_handler(),
         TileType::Bomb,
+        OnPlayingScreen,
     ));
 }
 
@@ -133,5 +135,6 @@ fn spawn_wall(commands: &mut Commands, tileset: Handle<TextureAtlas>, x: i32, y:
             grid_coords: GridCoordinates { x, y },
         },
         TileType::Wall,
+        OnPlayingScreen,
     ));
 }

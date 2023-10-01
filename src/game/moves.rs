@@ -77,6 +77,13 @@ impl ValidatedEventQueue {
             explosions: Vec::default(),
         };
         for coords in candidate_coords {
+            match tile_grid.get(&coords) {
+                Some(tile_type) => match tile_type {
+                    TileType::Bomb | TileType::Coin(_) => (),
+                    TileType::Wall => break,
+                },
+                None => break,
+            }
             let can_combine_result = tile_grid.can_combine_tile(&coords, move_direction);
             match can_combine_result {
                 CanCombineResult::Yes(result) => {
@@ -90,6 +97,7 @@ impl ValidatedEventQueue {
                             });
                         }
                         CombinationResult::Explosion => {
+                            // TODO: Re-enable if game is too hard
                             // valid_events
                             //     .explosions
                             //     .push(ExplosionEvent { target: coords });
