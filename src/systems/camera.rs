@@ -1,8 +1,6 @@
 use bevy::{
-    prelude::{
-        Camera, Camera2dBundle, Commands, OrthographicProjection, Transform, UVec2, Vec2, Vec3,
-    },
-    render::camera::{ScalingMode, Viewport},
+    prelude::{Camera2dBundle, Commands, Vec3},
+    render::camera::ScalingMode,
 };
 
 use crate::constants::{GRID_SIZE, TILE_SIZE};
