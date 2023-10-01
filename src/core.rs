@@ -73,9 +73,9 @@ impl GamePlugin {
             (
                 systems::camera::setup,
                 systems::grid::setup_grid,
-                systems::debug::setup_debug,
                 systems::ui::spawn_ui,
                 systems::ui::reset_score,
+                systems::grid::spawn_first_tile,
             ),
         );
     }

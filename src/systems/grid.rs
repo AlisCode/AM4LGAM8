@@ -1,5 +1,6 @@
 use bevy::prelude::{
-    Added, Commands, DespawnRecursive, Entity, Event, EventReader, NextState, Query, Res, ResMut,
+    Added, Commands, DespawnRecursive, Entity, Event, EventReader, EventWriter, NextState, Query,
+    Res, ResMut,
 };
 
 use crate::{
@@ -65,11 +66,6 @@ pub fn spawn_new_tile_on_valid_move(
     tile_grid: Res<TileGrid>,
     mut valid_turn_event_rx: EventReader<ValidTurnEvent>,
 ) {
-    // TODO: Player has played a valid turn
-    // * Play sound
-    // * Gen new tile
-    // * Check for game over
-
     for _ in valid_turn_event_rx.iter() {
         let maybe_unused_coordinate = tile_grid.get_unused_coordinate();
 
@@ -86,4 +82,8 @@ pub fn spawn_new_tile_on_valid_move(
             None => panic!("No coordinates to spawn a tile on. This is bug."),
         }
     }
+}
+
+pub fn spawn_first_tile(mut valid_turn_event_tx: EventWriter<ValidTurnEvent>) {
+    valid_turn_event_tx.send(ValidTurnEvent);
 }

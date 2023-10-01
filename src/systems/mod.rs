@@ -2,7 +2,7 @@ use bevy::prelude::Component;
 
 pub mod animations;
 pub mod camera;
-pub mod debug;
+// pub mod debug;
 pub mod explosion;
 pub mod game_over;
 pub mod grid;
