@@ -2,7 +2,7 @@
 
 > AMALGAMATE (Intransitive verb) : To combine into a unified or integrated whole
 
-[Splashart](splash.png)
+![Splashart](splash.png)
 
 A game made in 48 hours for the [Ludum Dare](ldjam.com) Game Jam using Rust+Bevy. The theme was "Limited Space".
 
@@ -14,8 +14,8 @@ The game is playable on the Web here : https://opinon.itch.io/am4lgam8-ludum-dar
 
 # Screenshots
 
-[Screenshot](screen1.png)
-[Screenshot](screen2.png)
+![Screenshot](screen1.png)
+![Screenshot](screen2.png)
 
 # Tech
 
