@@ -198,7 +198,6 @@ pub fn handle_explosion_events(
             ExplosionResult::ScorePoints(points) => {
                 game_score.add(points);
                 commands.spawn(ExplosionBundle::new(&assets, coords.clone()));
-                // TODO: Animate
                 commands.add(Despawn { entity });
             }
         }
