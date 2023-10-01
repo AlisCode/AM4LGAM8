@@ -82,6 +82,7 @@ pub fn setup(mut commands: Commands, assets: Res<GameAssets>) {
                         TextStyle {
                             font_size: 40.0,
                             color: background_color(),
+                            font: assets.joystix.clone(),
                             ..Default::default()
                         },
                     ));

@@ -8,6 +8,7 @@ use bevy::{
 };
 
 use crate::{
+    assets::GameAssets,
     constants::{background_color, foreground_color},
     core::GameState,
 };
@@ -20,7 +21,7 @@ pub struct OnGameOverScreen;
 #[derive(Component)]
 pub struct ToTitleScreenButton;
 
-pub fn setup(mut commands: Commands, score: Res<GameScore>) {
+pub fn setup(mut commands: Commands, score: Res<GameScore>, assets: Res<GameAssets>) {
     commands
         .spawn((
             NodeBundle {
@@ -42,6 +43,7 @@ pub fn setup(mut commands: Commands, score: Res<GameScore>) {
                 TextStyle {
                     font_size: 40.0,
                     color: foreground_color(),
+                    font: assets.joystix.clone(),
                     ..Default::default()
                 },
             ));
@@ -50,6 +52,7 @@ pub fn setup(mut commands: Commands, score: Res<GameScore>) {
                 TextStyle {
                     font_size: 40.0,
                     color: foreground_color(),
+                    font: assets.joystix.clone(),
                     ..Default::default()
                 },
             ));
@@ -76,6 +79,7 @@ pub fn setup(mut commands: Commands, score: Res<GameScore>) {
                         TextStyle {
                             font_size: 40.0,
                             color: background_color(),
+                            font: assets.joystix.clone(),
                             ..Default::default()
                         },
                     ));

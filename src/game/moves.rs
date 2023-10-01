@@ -97,10 +97,9 @@ impl ValidatedEventQueue {
                             });
                         }
                         CombinationResult::Explosion => {
-                            // TODO: Re-enable if game is too hard
-                            // valid_events
-                            //     .explosions
-                            //     .push(ExplosionEvent { target: coords });
+                            valid_events
+                                .explosions
+                                .push(ExplosionEvent { target: coords });
                             valid_events.explosions.push(ExplosionEvent { target });
                         }
                     }

@@ -1,6 +1,7 @@
 use bevy::math::Vec2;
 use bevy::prelude::{AssetServer, Assets, Handle, Image, Resource};
 use bevy::sprite::TextureAtlas;
+use bevy::text::Font;
 use bevy_asset_loader::asset_collection::AssetCollection;
 
 #[derive(AssetCollection, Resource)]
@@ -29,4 +30,6 @@ pub struct GameAssets {
     ))]
     #[asset(path = "explosion.png")]
     pub explosion: Handle<TextureAtlas>,
+    #[asset(path = "joystix.otf")]
+    pub joystix: Handle<Font>,
 }

@@ -1,6 +1,5 @@
 use bevy::prelude::{
-    Added, Commands, DespawnRecursive, Entity, Event, EventReader, EventWriter, NextState, Query,
-    Res, ResMut,
+    Added, Commands, DespawnRecursive, Entity, Event, EventReader, NextState, Query, Res, ResMut,
 };
 
 use crate::{
@@ -10,7 +9,7 @@ use crate::{
     core::GameState,
     game::{
         grid::{GridCoordinates, TileGrid},
-        tile::TileType,
+        tile::{CoinValue, TileType},
     },
 };
 
@@ -85,6 +84,12 @@ pub fn spawn_new_tile_on_valid_move(
     }
 }
 
-pub fn spawn_first_tile(mut valid_turn_event_tx: EventWriter<ValidTurnEvent>) {
-    valid_turn_event_tx.send(ValidTurnEvent);
+pub fn spawn_first_tile(mut commands: Commands, game_assets: Res<GameAssets>) {
+    spawn_tile_type_bundle(
+        &mut commands,
+        game_assets.tileset.clone(),
+        TileType::Coin(CoinValue::One),
+        1,
+        1,
+    );
 }

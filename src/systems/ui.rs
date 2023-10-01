@@ -67,12 +67,13 @@ pub fn spawn_ui(mut commands: Commands, assets: Res<GameAssets>) {
             TextStyle {
                 font_size: 45.,
                 color: foreground_color(),
+                font: assets.joystix.clone(),
                 ..Default::default()
             },
         )
         .with_style(Style {
             position_type: bevy::ui::PositionType::Absolute,
-            bottom: Val::Px(-5.),
+            bottom: Val::Px(-2.),
             left: Val::Px(120.),
             ..Default::default()
         }),
