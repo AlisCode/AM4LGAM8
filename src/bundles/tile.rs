@@ -56,7 +56,7 @@ fn spawn_coin(
                     ..Default::default()
                 },
                 transform: Transform {
-                    translation: Vec3::new(x as f32 * TILE_SIZE, y as f32 * TILE_SIZE, 1.),
+                    translation: Vec3::new(x as f32 * TILE_SIZE, y as f32 * TILE_SIZE, 0.),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -80,7 +80,7 @@ fn spawn_bomb(commands: &mut Commands, tileset: Handle<TextureAtlas>, x: i32, y:
                     ..Default::default()
                 },
                 transform: Transform {
-                    translation: Vec3::new(x as f32 * TILE_SIZE, y as f32 * TILE_SIZE, 1.),
+                    translation: Vec3::new(x as f32 * TILE_SIZE, y as f32 * TILE_SIZE, 0.),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -104,7 +104,7 @@ fn spawn_wall(commands: &mut Commands, tileset: Handle<TextureAtlas>, x: i32, y:
                     ..Default::default()
                 },
                 transform: Transform {
-                    translation: Vec3::new(x as f32 * TILE_SIZE, y as f32 * TILE_SIZE, 1.),
+                    translation: Vec3::new(x as f32 * TILE_SIZE, y as f32 * TILE_SIZE, 0.),
                     ..Default::default()
                 },
                 ..Default::default()

@@ -1,5 +1,5 @@
 use bevy::{
-    prelude::{App, ClearColor, DefaultPlugins, ImagePlugin, PluginGroup},
+    prelude::{App, ClearColor, DefaultPlugins, ImagePlugin, Msaa, PluginGroup},
     window::{Window, WindowPlugin},
 };
 use bevy_mod_picking::{
@@ -32,6 +32,9 @@ fn main() {
                 .set(ImagePlugin::default_nearest()),
         )
         .insert_resource(ClearColor(background_color()))
+        // MSAA on the tiles has a weird "1 pixel gap" glitch.
+        // This hack gets rid of that.
+        .insert_resource(Msaa::Off)
         // bevy_mod_picking with hacked support for TextureAtlas
         // A big thank you to Github user focustense, saving my jam at 2AM with
         // this masterclass of a comment :
