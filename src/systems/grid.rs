@@ -54,6 +54,7 @@ pub fn sync_tile_grid(
             commands.add(DespawnRecursive { entity });
         }
         next_state.set(GameState::GameOver);
+        *tile_grid = TileGrid::default();
     }
 }
 

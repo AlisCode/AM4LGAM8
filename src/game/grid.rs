@@ -186,6 +186,9 @@ impl TileGrid {
     pub fn get_unused_coordinate(&self) -> Option<GridCoordinates> {
         // Quick and hacky way to get an element from a set
         // I don't have a better idea rn
+        if self.unused_coordinates.is_empty() {
+            return None;
+        }
         let idx = rand::thread_rng().gen_range(0..self.unused_coordinates.len());
         self.unused_coordinates.iter().skip(idx).next().cloned()
     }
@@ -213,6 +216,9 @@ impl TileGrid {
     }
 
     pub fn has_any_possible_moves(&self) -> bool {
+        if !self.unused_coordinates.is_empty() {
+            return true;
+        }
         (0..=GRID_SIZE)
             .flat_map(move |x| (0..=GRID_SIZE).map(move |y| GridCoordinates { x, y }))
             .any(|coords| {
@@ -238,10 +244,13 @@ impl TileGrid {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::game::{
-        grid::{GridCoordinates, MoveTileEvent, TileGrid},
-        moves::{CanMoveResult, ExplosionEvent, MergeTilesEvent, MoveDirection},
-        tile::{CoinValue, TileType},
+    use crate::{
+        constants::GRID_SIZE,
+        game::{
+            grid::{GridCoordinates, MoveTileEvent, TileGrid},
+            moves::{CanMoveResult, ExplosionEvent, MergeTilesEvent, MoveDirection},
+            tile::{CoinValue, TileType},
+        },
     };
 
     #[test]
@@ -540,10 +549,12 @@ pub mod tests {
 
         assert!(tile_grid.has_any_possible_moves());
 
-        tile_grid.insert(GridCoordinates { x: -1, y: 0 }, TileType::Wall);
-        tile_grid.insert(GridCoordinates { x: 1, y: 0 }, TileType::Wall);
-        tile_grid.insert(GridCoordinates { x: 0, y: 1 }, TileType::Wall);
-        tile_grid.insert(GridCoordinates { x: 0, y: -1 }, TileType::Wall);
+        for coord in (-1..=GRID_SIZE)
+            .flat_map(move |x| (-1..GRID_SIZE).map(move |y| GridCoordinates { x, y }))
+        {
+            tile_grid.insert(coord, TileType::Wall);
+        }
+        tile_grid.insert(GridCoordinates { x: 0, y: 0 }, TileType::Bomb);
 
         assert!(!tile_grid.has_any_possible_moves());
     }
