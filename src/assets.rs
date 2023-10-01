@@ -1,5 +1,5 @@
 use bevy::math::Vec2;
-use bevy::prelude::{AssetServer, Assets, Handle, Resource};
+use bevy::prelude::{AssetServer, Assets, Handle, Image, Resource};
 use bevy::sprite::TextureAtlas;
 use bevy_asset_loader::asset_collection::AssetCollection;
 
@@ -15,4 +15,6 @@ pub struct GameAssets {
     ))]
     #[asset(path = "tileset.png")]
     pub tileset: Handle<TextureAtlas>,
+    #[asset(path = "ui.png")]
+    pub ui: Handle<Image>,
 }

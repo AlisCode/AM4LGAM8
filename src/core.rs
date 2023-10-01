@@ -4,7 +4,7 @@ use crate::{
         grid::{MoveTileEvent, TileGrid},
         moves::{ExplosionEvent, MergeTilesEvent, ValidMoveEvent},
     },
-    systems::{self, grid::ValidTurnEvent, movables::RequestMoveEvent},
+    systems::{self, grid::ValidTurnEvent, movables::RequestMoveEvent, ui::GameScore},
 };
 use bevy::prelude::{in_state, App, IntoSystemConfigs, OnEnter, Plugin, PreUpdate, States, Update};
 use bevy_asset_loader::loading_state::{LoadingState, LoadingStateAppExt};
@@ -33,7 +33,8 @@ impl GamePlugin {
             .add_event::<MergeTilesEvent>()
             .add_event::<ExplosionEvent>()
             .add_event::<ValidTurnEvent>()
-            .insert_resource(TileGrid::default());
+            .insert_resource(TileGrid::default())
+            .insert_resource(GameScore::default());
     }
 
     fn on_enter_playing_state(app: &mut App) {
@@ -43,6 +44,8 @@ impl GamePlugin {
                 systems::camera::setup,
                 systems::grid::setup_grid,
                 systems::debug::setup_debug,
+                systems::ui::spawn_ui,
+                systems::ui::reset_score,
             ),
         );
     }
@@ -69,6 +72,7 @@ impl GamePlugin {
             handle_combine_events,
             handle_valid_move_events,
             handle_valid_turn,
+            systems::ui::update_ui,
         )
             .run_if(in_state(GameState::Playing));
         app.add_systems(Update, update_systems);

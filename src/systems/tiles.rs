@@ -17,7 +17,7 @@ use crate::{
     },
 };
 
-use super::{grid::ValidTurnEvent, movables::RequestMoveEvent};
+use super::{grid::ValidTurnEvent, movables::RequestMoveEvent, ui::GameScore};
 
 /// Validates incoming RequestMoveEvent into ValidMoveEvent
 pub fn handle_requested_move_events(
@@ -175,6 +175,7 @@ pub fn handle_explosion_events(
     mut explosion_event_rx: EventReader<ExplosionEvent>,
     query: Query<(Entity, &GridCoordinates, &TileType)>,
     mut tile_grid: ResMut<TileGrid>,
+    mut game_score: ResMut<GameScore>,
 ) {
     let mut grid_coords_to_delete: HashSet<GridCoordinates> = HashSet::default();
     let mut events = Vec::default();
@@ -192,8 +193,9 @@ pub fn handle_explosion_events(
 
         match tile_type.explosion_result() {
             ExplosionResult::NoExplosion => continue,
-            ExplosionResult::ScorePoints(_points) => {
-                // TODO: Inc points
+            ExplosionResult::ScorePoints(points) => {
+                game_score.add(points);
+
                 // TODO: Animate
                 commands.add(Despawn { entity });
             }
