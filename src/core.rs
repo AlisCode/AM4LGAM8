@@ -4,16 +4,21 @@ use crate::{
         grid::{MoveTileEvent, TileGrid},
         moves::{ExplosionEvent, MergeTilesEvent, ValidMoveEvent},
     },
-    systems::{self, grid::ValidTurnEvent, movables::RequestMoveEvent, ui::GameScore},
+    systems::{
+        self, grid::ValidTurnEvent, movables::RequestMoveEvent, title_screen::TitleScreenEntities,
+        ui::GameScore,
+    },
 };
 use bevy::prelude::{in_state, App, IntoSystemConfigs, OnEnter, Plugin, PreUpdate, States, Update};
 use bevy_asset_loader::loading_state::{LoadingState, LoadingStateAppExt};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, States)]
-enum GameState {
+pub enum GameState {
     #[default]
     Loading,
+    TitleScreen,
     Playing,
+    GameOver,
 }
 
 pub struct GamePlugin;
@@ -21,7 +26,7 @@ pub struct GamePlugin;
 impl GamePlugin {
     fn assets(app: &mut App) {
         app.add_loading_state(
-            LoadingState::new(GameState::Loading).continue_to_state(GameState::Playing),
+            LoadingState::new(GameState::Loading).continue_to_state(GameState::TitleScreen),
         )
         .add_collection_to_loading_state::<_, assets::GameAssets>(GameState::Loading);
     }
@@ -34,7 +39,22 @@ impl GamePlugin {
             .add_event::<ExplosionEvent>()
             .add_event::<ValidTurnEvent>()
             .insert_resource(TileGrid::default())
-            .insert_resource(GameScore::default());
+            .insert_resource(GameScore::default())
+            .insert_resource(TitleScreenEntities::default());
+    }
+
+    fn on_enter_title_screen(app: &mut App) {
+        app.add_systems(
+            OnEnter(GameState::TitleScreen),
+            (systems::camera::setup, systems::title_screen::setup),
+        );
+    }
+
+    fn on_update_title_screen(app: &mut App) {
+        app.add_systems(
+            Update,
+            systems::title_screen::update_ui.run_if(in_state(GameState::TitleScreen)),
+        );
     }
 
     fn on_enter_playing_state(app: &mut App) {
@@ -86,6 +106,8 @@ impl Plugin for GamePlugin {
         app.add_state::<GameState>();
         GamePlugin::assets(app);
         GamePlugin::resources(app);
+        GamePlugin::on_enter_title_screen(app);
+        GamePlugin::on_update_title_screen(app);
         GamePlugin::on_enter_playing_state(app);
         GamePlugin::on_update_playing_state(app);
     }
