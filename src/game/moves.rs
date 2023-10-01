@@ -139,7 +139,7 @@ impl ValidatedEventQueue {
 pub mod tests {
     use crate::game::{
         grid::{GridCoordinates, MoveTileEvent, TileGrid},
-        moves::{MoveDirection, ValidEvents, ValidMoveEvent, ValidatedEventQueue},
+        moves::{ExplosionEvent, MoveDirection, ValidEvents, ValidMoveEvent, ValidatedEventQueue},
         tile::{CoinValue, TileType},
     };
 
@@ -239,4 +239,36 @@ pub mod tests {
 
     // TODO: Test merges
     // TODO: Test explosions
+    #[test]
+    fn should_push_to_explode_tiles() {
+        let mut tile_grid = TileGrid::default();
+        tile_grid.insert(GridCoordinates { x: 0, y: 0 }, TileType::Bomb);
+        tile_grid.insert(GridCoordinates { x: 1, y: 0 }, TileType::Bomb);
+        tile_grid.insert(
+            GridCoordinates { x: 2, y: 0 },
+            TileType::Coin(CoinValue::One),
+        );
+
+        let coords = GridCoordinates { x: 2, y: 0 }.candidate_coords_for_dir(MoveDirection::Left);
+        let validated_event_queue =
+            ValidatedEventQueue::validate_move(&tile_grid, coords, MoveDirection::Left);
+        assert_eq!(
+            validated_event_queue,
+            ValidatedEventQueue::ValidMove(ValidEvents {
+                moves: vec![ValidMoveEvent {
+                    coords: GridCoordinates { x: 2, y: 0 },
+                    move_direction: MoveDirection::Left,
+                }],
+                merges: vec![],
+                explosions: vec![
+                    ExplosionEvent {
+                        target: GridCoordinates { x: 1, y: 0 }
+                    },
+                    ExplosionEvent {
+                        target: GridCoordinates { x: 0, y: 0 }
+                    }
+                ],
+            })
+        );
+    }
 }

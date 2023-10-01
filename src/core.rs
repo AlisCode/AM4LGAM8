@@ -89,9 +89,9 @@ impl GamePlugin {
 
         // Update
         let handle_explosion_events =
-            systems::tiles::handle_explosion_events.before(systems::tiles::handle_combine_events);
+            systems::tiles::handle_explosion_events.after(systems::tiles::handle_combine_events);
         let handle_combine_events =
-            systems::tiles::handle_combine_events.before(systems::tiles::handle_valid_move_events);
+            systems::tiles::handle_combine_events.after(systems::tiles::handle_valid_move_events);
         let handle_valid_move_events = systems::tiles::handle_valid_move_events;
         let handle_valid_turn =
             systems::grid::spawn_new_tile_on_valid_move.after(handle_valid_move_events);
