@@ -2,6 +2,7 @@ use bevy::{
     prelude::{App, ClearColor, DefaultPlugins, ImagePlugin, Msaa, PluginGroup},
     window::{Window, WindowPlugin},
 };
+use bevy_easings::EasingsPlugin;
 use bevy_mod_picking::{
     prelude::{DebugPickingPlugin, SpriteBackend},
     DefaultPickingPlugins,
@@ -47,6 +48,7 @@ fn main() {
                 .disable::<SpriteBackend>(),
         )
         .add_plugins(TextureAtlasBackend)
+        .add_plugins(EasingsPlugin)
         .add_plugins(core::GamePlugin)
         .run()
 }

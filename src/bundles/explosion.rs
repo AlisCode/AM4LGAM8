@@ -10,13 +10,13 @@ use crate::{
     assets::GameAssets,
     constants::TILE_SIZE,
     game::grid::GridCoordinates,
-    systems::explosion::{Explosion, ExplosionAnimation},
+    systems::{explosion::ExplosionAnimation, marked_for_deletion::MarkedForDeletion},
 };
 
 #[derive(Bundle)]
 pub struct ExplosionBundle {
     sprite_sheet: SpriteSheetBundle,
-    explosion: Explosion,
+    deletion_marker: MarkedForDeletion,
     explosion_anim: ExplosionAnimation,
 }
 
@@ -39,7 +39,7 @@ impl ExplosionBundle {
                 },
                 ..Default::default()
             },
-            explosion: Explosion(Timer::new(
+            deletion_marker: MarkedForDeletion(Timer::new(
                 Duration::from_secs_f32(ANIMATION_DURATION),
                 TimerMode::Once,
             )),

@@ -1,6 +1,5 @@
 use bevy::{
-    ecs::system::Despawn,
-    prelude::{Commands, Component, Entity, Query, Res},
+    prelude::{Component, Query, Res},
     sprite::TextureAtlasSprite,
     time::{Time, Timer},
 };
@@ -12,27 +11,16 @@ pub struct Explosion(pub Timer);
 pub struct ExplosionAnimation(pub Timer);
 
 pub fn animate_explosion(
-    mut commands: Commands,
-    mut query: Query<(
-        Entity,
-        &mut Explosion,
-        &mut ExplosionAnimation,
-        &mut TextureAtlasSprite,
-    )>,
+    mut query: Query<(&mut ExplosionAnimation, &mut TextureAtlasSprite)>,
     time: Res<Time>,
 ) {
     let delta = time.delta();
-    for (entity, mut explosion, mut anim, mut sprite) in query.iter_mut() {
-        explosion.0.tick(delta);
+    for (mut anim, mut sprite) in query.iter_mut() {
         anim.0.tick(delta);
 
         if anim.0.finished() {
             sprite.index = (sprite.index + 1).min(5);
             anim.0.reset();
-        }
-
-        if explosion.0.finished() {
-            commands.add(Despawn { entity });
         }
     }
 }

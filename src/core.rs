@@ -74,6 +74,7 @@ impl GamePlugin {
             handle_valid_turn,
             systems::ui::update_ui,
             systems::explosion::animate_explosion,
+            systems::marked_for_deletion::tick_marked_for_deletion,
         )
             .run_if(in_state(GameState::Playing));
         app.add_systems(Update, update_systems);

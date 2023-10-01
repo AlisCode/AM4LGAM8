@@ -3,6 +3,7 @@ pub mod camera;
 pub mod debug;
 pub mod explosion;
 pub mod grid;
+pub mod marked_for_deletion;
 pub mod movables;
 pub mod tiles;
 pub mod ui;

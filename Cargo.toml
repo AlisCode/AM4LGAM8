@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 bevy = { version = "0.11", features = ["dynamic_linking"] }
 bevy_asset_loader = { version = "0.17.0", features = ["2d"] }
+bevy_easings = "0.11.1"
 bevy_mod_picking = "0.15.0"
 bevy_picking_core = "0.15.0"
 rand = "0.8.5"

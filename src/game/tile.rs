@@ -70,11 +70,12 @@ impl TileType {
 
     pub fn gen_random() -> Self {
         let mut rng = rand::thread_rng();
-        match rng.gen_range(1..=10) {
-            1..=5 => TileType::Coin(CoinValue::One),
-            6..=7 => TileType::Coin(CoinValue::Two),
-            8..=10 => TileType::Bomb,
-            _ => panic!("range 1..=10"),
+        match rng.gen_range(0..=10) {
+            0..=4 => TileType::Coin(CoinValue::One),
+            5..=6 => TileType::Coin(CoinValue::Two),
+            7..=9 => TileType::Bomb,
+            10..=10 => TileType::Wall,
+            _ => panic!("range 0..=10"),
         }
     }
 }

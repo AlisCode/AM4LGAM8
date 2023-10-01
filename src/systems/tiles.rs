@@ -7,7 +7,7 @@ use bevy::{
 use crate::{
     assets::GameAssets,
     bundles::{explosion::ExplosionBundle, tile::spawn_tile_type_bundle},
-    constants::{GRID_SIZE, TILE_SIZE},
+    constants::GRID_SIZE,
     game::{
         grid::{GridCoordinates, MoveTileEvent, TileGrid},
         moves::{
@@ -17,7 +17,12 @@ use crate::{
     },
 };
 
-use super::{grid::ValidTurnEvent, movables::RequestMoveEvent, ui::GameScore};
+use super::{
+    animations::{add_movement_animation, AndDeleteAfter},
+    grid::ValidTurnEvent,
+    movables::RequestMoveEvent,
+    ui::GameScore,
+};
 
 /// Validates incoming RequestMoveEvent into ValidMoveEvent
 pub fn handle_requested_move_events(
@@ -80,9 +85,10 @@ pub fn handle_requested_move_events(
 }
 
 pub fn handle_valid_move_events(
+    mut commands: Commands,
     mut valid_event_rx: EventReader<ValidMoveEvent>,
     mut move_tile_event_tx: EventWriter<MoveTileEvent>,
-    mut query: Query<(&mut GridCoordinates, &mut Transform, &TileType)>,
+    mut query: Query<(Entity, &mut GridCoordinates, &Transform, &TileType)>,
     mut tile_grid: ResMut<TileGrid>,
 ) {
     // Necessary because mutating the coords as we go may have unwanted side-effects
@@ -105,14 +111,18 @@ pub fn handle_valid_move_events(
         )
         .collect();
     let mut events = Vec::default();
-    for (mut coords, mut transform, _tile_type) in query.iter_mut() {
+    for (entity, mut coords, transform, _tile_type) in query.iter_mut() {
         if let Some(new_coords) = old_coords_to_new_coords.remove(&*coords) {
             let old_coords = coords.clone();
             *coords = new_coords;
 
-            // TODO: Animate
-            transform.translation.x = coords.x as f32 * TILE_SIZE;
-            transform.translation.y = coords.y as f32 * TILE_SIZE;
+            add_movement_animation(
+                &mut commands,
+                entity,
+                transform,
+                coords.clone(),
+                AndDeleteAfter::No,
+            );
 
             events.push(MoveTileEvent {
                 source: old_coords,
@@ -127,11 +137,12 @@ pub fn handle_valid_move_events(
 pub fn handle_combine_events(
     mut commands: Commands,
     mut combine_event_rx: EventReader<MergeTilesEvent>,
-    query: Query<(Entity, &GridCoordinates)>,
+    query: Query<(Entity, &GridCoordinates, &Transform)>,
     assets: Res<GameAssets>,
     mut tile_grid: ResMut<TileGrid>,
 ) {
-    let mut grid_coords_to_delete: HashSet<&GridCoordinates> = HashSet::default();
+    let mut grid_coords_to_new_coords: HashMap<GridCoordinates, GridCoordinates> =
+        HashMap::default();
     let mut tiles_to_spawn: Vec<(GridCoordinates, TileType)> = Vec::default();
     let mut events: Vec<_> = Vec::default();
     for event in combine_event_rx.iter() {
@@ -141,21 +152,30 @@ pub fn handle_combine_events(
             target,
             resulting_type,
         } = event;
-        grid_coords_to_delete.extend(vec![source, target]);
+        grid_coords_to_new_coords.insert(source.clone(), target.clone());
+        grid_coords_to_new_coords.insert(target.clone(), target.clone());
         if let Some(tile_type) = resulting_type {
             tiles_to_spawn.push((target.clone(), tile_type.clone()));
         }
     }
     tile_grid.handle_combine_events(events.iter());
 
-    // Despawns tiles that have been combined
-    // TODO: Animate
-    for despawn_command in query.iter().filter_map(|(entity, grid_coords)| {
-        grid_coords_to_delete
-            .contains(grid_coords)
-            .then(|| Despawn { entity })
-    }) {
-        commands.add(despawn_command);
+    // Play the animation to combine the tiles
+    for (entity, grid_coords, transform) in query.iter() {
+        if let Some(new_coords) = grid_coords_to_new_coords.get(grid_coords) {
+            if grid_coords == new_coords {
+                // TODO: Animate fusion ?
+                commands.add(Despawn { entity })
+            } else {
+                add_movement_animation(
+                    &mut commands,
+                    entity,
+                    transform,
+                    new_coords.clone(),
+                    AndDeleteAfter::Yes,
+                );
+            }
+        }
     }
 
     // Spawn tiles issued from combinations
