@@ -1,5 +1,6 @@
 use bevy::prelude::{
-    Added, Commands, DespawnRecursive, Entity, Event, EventReader, NextState, Query, Res, ResMut,
+    Added, Commands, DespawnRecursive, Entity, Event, EventReader, EventWriter, NextState, Query,
+    Res, ResMut,
 };
 
 use crate::{
@@ -44,11 +45,21 @@ pub fn sync_tile_grid(
     mut tile_grid: ResMut<TileGrid>,
     newly_spawned_tiles: Query<(&TileType, &GridCoordinates), Added<GridCoordinates>>,
     mut next_state: ResMut<NextState<GameState>>,
+    mut valid_turn_event_tx: EventWriter<ValidTurnEvent>,
 ) {
     for (tile_type, coords) in newly_spawned_tiles.iter() {
         tile_grid.insert(coords.clone(), *tile_type);
     }
+
+    // It is game over
     if !tile_grid.has_any_possible_moves() {
+        // Unless we still do have unused coordinates, in which case we can trigger the spawn of a
+        // new tile
+        if tile_grid.has_unused_coordinates() {
+            valid_turn_event_tx.send(ValidTurnEvent);
+            return;
+        }
+
         for (entity, _on_screen) in all_entities_on_screen.iter() {
             commands.add(DespawnRecursive { entity });
         }

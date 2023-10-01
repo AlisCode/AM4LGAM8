@@ -216,9 +216,6 @@ impl TileGrid {
     }
 
     pub fn has_any_possible_moves(&self) -> bool {
-        if !self.unused_coordinates.is_empty() {
-            return true;
-        }
         (0..=GRID_SIZE)
             .flat_map(move |x| (0..=GRID_SIZE).map(move |y| GridCoordinates { x, y }))
             .any(|coords| {
@@ -239,6 +236,10 @@ impl TileGrid {
             ValidatedEventQueue::ValidMove(_) => true,
             ValidatedEventQueue::InvalidMove => false,
         }
+    }
+
+    pub fn has_unused_coordinates(&self) -> bool {
+        !self.unused_coordinates.is_empty()
     }
 }
 
