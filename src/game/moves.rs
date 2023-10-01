@@ -14,16 +14,22 @@ pub struct ValidMoveEvent {
 }
 
 #[derive(Debug, PartialEq, Eq, Event)]
-pub struct CombineEvent {
+pub struct MergeTilesEvent {
     pub source: GridCoordinates,
     pub target: GridCoordinates,
     pub resulting_type: Option<TileType>,
 }
 
+#[derive(Debug, PartialEq, Eq, Event)]
+pub struct ExplosionEvent {
+    pub target: GridCoordinates,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct ValidEvents {
     pub moves: Vec<ValidMoveEvent>,
-    pub combines: Vec<CombineEvent>,
+    pub merges: Vec<MergeTilesEvent>,
+    pub explosions: Vec<ExplosionEvent>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -67,20 +73,24 @@ impl ValidatedEventQueue {
     ) -> Self {
         let mut valid_events = ValidEvents {
             moves: Vec::default(),
-            combines: Vec::default(),
+            merges: Vec::default(),
+            explosions: Vec::default(),
         };
         for coords in candidate_coords {
             let can_combine_result = tile_grid.can_combine_tile(&coords, move_direction);
             match can_combine_result {
                 CanCombineResult::Yes(result) => {
+                    let target = coords.coords_after_move(move_direction);
                     match result {
                         CombinationResult::MergeTilesInto(resulting_type) => {
-                            let target = coords.coords_after_move(move_direction);
-                            valid_events.combines.push(CombineEvent {
+                            valid_events.merges.push(MergeTilesEvent {
                                 source: coords,
                                 target,
                                 resulting_type: Some(resulting_type),
                             });
+                        }
+                        CombinationResult::Explosion => {
+                            valid_events.explosions.push(ExplosionEvent { target });
                         }
                     }
                     return ValidatedEventQueue::ValidMove(valid_events);
@@ -211,8 +221,12 @@ pub mod tests {
                         coords: GridCoordinates { x: 1, y: 0 },
                     }
                 ],
-                combines: vec![],
+                merges: vec![],
+                explosions: vec![],
             }),
         );
     }
+
+    // TODO: Test merges
+    // TODO: Test explosions
 }

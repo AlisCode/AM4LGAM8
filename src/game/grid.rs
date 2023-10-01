@@ -4,7 +4,7 @@ use bevy::{
 };
 
 use super::{
-    moves::{CanCombineResult, CanMoveResult, CombineEvent, MoveDirection},
+    moves::{CanCombineResult, CanMoveResult, ExplosionEvent, MergeTilesEvent, MoveDirection},
     tile::TileType,
 };
 
@@ -25,6 +25,16 @@ impl GridCoordinates {
             MoveDirection::Up => GridCoordinates { x: *x, y: y + 1 },
             MoveDirection::Down => GridCoordinates { x: *x, y: y - 1 },
         }
+    }
+
+    pub fn explosion_radius(&self) -> Vec<GridCoordinates> {
+        vec![
+            self.clone(),
+            self.coords_after_move(MoveDirection::Up),
+            self.coords_after_move(MoveDirection::Down),
+            self.coords_after_move(MoveDirection::Left),
+            self.coords_after_move(MoveDirection::Right),
+        ]
     }
 }
 
@@ -89,11 +99,14 @@ impl TileGrid {
         }
     }
 
-    pub fn handle_combine_events<'a, I: Iterator<Item = &'a CombineEvent>>(&mut self, events: I) {
+    pub fn handle_combine_events<'a, I: Iterator<Item = &'a MergeTilesEvent>>(
+        &mut self,
+        events: I,
+    ) {
         let mut deletions = Vec::default();
         let mut maybe_insertions = Vec::default();
         for event in events {
-            let CombineEvent {
+            let MergeTilesEvent {
                 source,
                 target,
                 resulting_type,
@@ -108,6 +121,18 @@ impl TileGrid {
         }
         for (coords, maybe_tile_type) in maybe_insertions {
             self.maybe_insert(coords, maybe_tile_type);
+        }
+    }
+
+    pub fn handle_explosion_events<'a, I: Iterator<Item = &'a ExplosionEvent>>(
+        &mut self,
+        events: I,
+    ) {
+        for event in events {
+            let ExplosionEvent { target } = event;
+            for coord in target.explosion_radius() {
+                self.0.remove(&coord);
+            }
         }
     }
 
@@ -135,7 +160,7 @@ impl TileGrid {
 pub mod tests {
     use crate::game::{
         grid::{GridCoordinates, TileGrid},
-        moves::{CanMoveResult, CombineEvent, MoveDirection},
+        moves::{CanMoveResult, ExplosionEvent, MergeTilesEvent, MoveDirection},
         tile::{CoinValue, TileType},
     };
 
@@ -249,7 +274,7 @@ pub mod tests {
             TileType::Coin(CoinValue::One),
         );
 
-        let events = vec![CombineEvent {
+        let events = vec![MergeTilesEvent {
             source: GridCoordinates { x: 0, y: 0 },
             target: GridCoordinates { x: 1, y: 0 },
             resulting_type: Some(TileType::Coin(CoinValue::Two)),
@@ -259,6 +284,35 @@ pub mod tests {
         assert_eq!(tile_grid.get(&GridCoordinates { x: 0, y: 0 }), None);
         assert_eq!(
             tile_grid.get(&GridCoordinates { x: 1, y: 0 }),
+            Some(&TileType::Coin(CoinValue::Two))
+        );
+    }
+
+    #[test]
+    fn should_explode_tiles() {
+        let mut tile_grid = TileGrid::default();
+        tile_grid.insert(
+            GridCoordinates { x: 0, y: 0 },
+            TileType::Coin(CoinValue::One),
+        );
+        tile_grid.insert(
+            GridCoordinates { x: 1, y: 0 },
+            TileType::Coin(CoinValue::One),
+        );
+        tile_grid.insert(
+            GridCoordinates { x: 3, y: 0 },
+            TileType::Coin(CoinValue::Two),
+        );
+
+        let events = vec![ExplosionEvent {
+            target: GridCoordinates { x: 0, y: 0 },
+        }];
+        tile_grid.handle_explosion_events(events.iter());
+
+        assert_eq!(tile_grid.get(&GridCoordinates { x: 0, y: 0 }), None);
+        assert_eq!(tile_grid.get(&GridCoordinates { x: 1, y: 0 }), None,);
+        assert_eq!(
+            tile_grid.get(&GridCoordinates { x: 3, y: 0 }),
             Some(&TileType::Coin(CoinValue::Two))
         );
     }

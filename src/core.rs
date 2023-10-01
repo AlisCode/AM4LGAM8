@@ -1,41 +1,82 @@
 use crate::{
+    assets,
     game::{
         grid::{MoveTileEvent, TileGrid},
-        moves::{CombineEvent, ValidMoveEvent},
+        moves::{ExplosionEvent, MergeTilesEvent, ValidMoveEvent},
     },
     systems::{self, movables::RequestMoveEvent},
 };
-use bevy::prelude::{App, Plugin, PreUpdate, Startup, Update};
+use bevy::prelude::{in_state, App, IntoSystemConfigs, OnEnter, Plugin, PreUpdate, States, Update};
+use bevy_asset_loader::loading_state::{LoadingState, LoadingStateAppExt};
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, States)]
+enum GameState {
+    #[default]
+    Loading,
+    Playing,
+}
 
 pub struct GamePlugin;
 
 impl GamePlugin {
+    fn assets(app: &mut App) {
+        app.add_loading_state(
+            LoadingState::new(GameState::Loading).continue_to_state(GameState::Playing),
+        )
+        .add_collection_to_loading_state::<_, assets::GameAssets>(GameState::Loading);
+    }
+
     fn resources(app: &mut App) {
         app.add_event::<RequestMoveEvent>()
             .add_event::<ValidMoveEvent>()
             .add_event::<MoveTileEvent>()
-            .add_event::<CombineEvent>()
+            .add_event::<MergeTilesEvent>()
+            .add_event::<ExplosionEvent>()
             .insert_resource(TileGrid::default());
     }
 
-    fn setup_systems(app: &mut App) {
-        app.add_systems(Startup, systems::camera::setup)
-            .add_systems(Startup, systems::grid::setup_grid)
-            .add_systems(Startup, systems::debug::setup_debug);
+    fn on_enter_playing_state(app: &mut App) {
+        app.add_systems(
+            OnEnter(GameState::Playing),
+            (
+                systems::camera::setup,
+                systems::grid::setup_grid,
+                systems::debug::setup_debug,
+            ),
+        );
     }
 
-    fn update_systems(app: &mut App) {
-        app.add_systems(PreUpdate, systems::grid::sync_tile_grid);
-        app.add_systems(Update, systems::tiles::handle_requested_move_events)
-            .add_systems(Update, systems::tiles::handle_valid_move_events)
-            .add_systems(Update, systems::tiles::handle_combine_events);
+    fn on_update_playing_state(app: &mut App) {
+        // Pre-Update
+        app.add_systems(
+            PreUpdate,
+            systems::grid::sync_tile_grid.run_if(in_state(GameState::Playing)),
+        );
+
+        // Update
+        let handle_explosion_events =
+            systems::tiles::handle_explosion_events.before(systems::tiles::handle_combine_events);
+        let handle_combine_events =
+            systems::tiles::handle_combine_events.before(systems::tiles::handle_valid_move_events);
+        let handle_valid_move_events = systems::tiles::handle_valid_move_events;
+
+        let update_systems = (
+            systems::tiles::handle_requested_move_events,
+            handle_explosion_events,
+            handle_combine_events,
+            handle_valid_move_events,
+        )
+            .run_if(in_state(GameState::Playing));
+        app.add_systems(Update, update_systems);
     }
 }
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
+        app.add_state::<GameState>();
+        GamePlugin::assets(app);
         GamePlugin::resources(app);
-        GamePlugin::setup_systems(app);
-        GamePlugin::update_systems(app);
+        GamePlugin::on_enter_playing_state(app);
+        GamePlugin::on_update_playing_state(app);
     }
 }

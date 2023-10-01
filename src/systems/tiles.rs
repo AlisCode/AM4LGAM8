@@ -5,12 +5,15 @@ use bevy::{
 };
 
 use crate::{
+    assets::GameAssets,
     bundles::tile::spawn_tile_type_bundle,
     constants::{GRID_SIZE, TILE_SIZE},
     game::{
         grid::{GridCoordinates, MoveTileEvent, TileGrid},
-        moves::{CombineEvent, MoveDirection, ValidMoveEvent, ValidatedEventQueue},
-        tile::TileType,
+        moves::{
+            ExplosionEvent, MergeTilesEvent, MoveDirection, ValidMoveEvent, ValidatedEventQueue,
+        },
+        tile::{ExplosionResult, TileType},
     },
 };
 
@@ -20,7 +23,8 @@ use super::movables::RequestMoveEvent;
 pub fn handle_requested_move_events(
     mut requested_event_rx: EventReader<RequestMoveEvent>,
     mut valid_move_event_tx: EventWriter<ValidMoveEvent>,
-    mut combine_event_tx: EventWriter<CombineEvent>,
+    mut combine_event_tx: EventWriter<MergeTilesEvent>,
+    mut explosion_event_tx: EventWriter<ExplosionEvent>,
     tile_grid: Res<TileGrid>,
 ) {
     for move_event in requested_event_rx.iter() {
@@ -66,7 +70,8 @@ pub fn handle_requested_move_events(
             ValidatedEventQueue::InvalidMove => (),
             ValidatedEventQueue::ValidMove(events) => {
                 valid_move_event_tx.send_batch(events.moves);
-                combine_event_tx.send_batch(events.combines);
+                combine_event_tx.send_batch(events.merges);
+                explosion_event_tx.send_batch(events.explosions);
             }
         }
     }
@@ -115,13 +120,14 @@ pub fn handle_valid_move_events(
 
 pub fn handle_combine_events(
     mut commands: Commands,
-    mut combine_event_rx: EventReader<CombineEvent>,
+    mut combine_event_rx: EventReader<MergeTilesEvent>,
     query: Query<(Entity, &GridCoordinates)>,
+    assets: Res<GameAssets>,
 ) {
     let mut grid_coords_to_delete: HashSet<&GridCoordinates> = HashSet::default();
     let mut tiles_to_spawn: Vec<(GridCoordinates, TileType)> = Vec::default();
     for event in combine_event_rx.iter() {
-        let CombineEvent {
+        let MergeTilesEvent {
             source,
             target,
             resulting_type,
@@ -144,6 +150,39 @@ pub fn handle_combine_events(
 
     // Spawn tiles issued from combinations
     for (coords, tile_type) in tiles_to_spawn {
-        spawn_tile_type_bundle(&mut commands, tile_type, coords.x, coords.y);
+        spawn_tile_type_bundle(
+            &mut commands,
+            assets.tileset.clone(),
+            tile_type,
+            coords.x,
+            coords.y,
+        );
+    }
+}
+
+pub fn handle_explosion_events(
+    mut commands: Commands,
+    mut explosion_event_rx: EventReader<ExplosionEvent>,
+    query: Query<(Entity, &GridCoordinates, &TileType)>,
+) {
+    let mut grid_coords_to_delete: HashSet<GridCoordinates> = HashSet::default();
+    for event in explosion_event_rx.iter() {
+        let ExplosionEvent { target } = event;
+        grid_coords_to_delete.extend(target.explosion_radius());
+    }
+
+    for (entity, coords, tile_type) in query.iter() {
+        if !grid_coords_to_delete.contains(coords) {
+            continue;
+        }
+
+        match tile_type.explosion_result() {
+            ExplosionResult::NoExplosion => continue,
+            ExplosionResult::ScorePoints(_points) => {
+                // TODO: Inc points
+                // TODO: Animate
+                commands.add(Despawn { entity });
+            }
+        }
     }
 }
