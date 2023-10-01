@@ -90,6 +90,9 @@ impl ValidatedEventQueue {
                             });
                         }
                         CombinationResult::Explosion => {
+                            valid_events
+                                .explosions
+                                .push(ExplosionEvent { target: coords });
                             valid_events.explosions.push(ExplosionEvent { target });
                         }
                     }

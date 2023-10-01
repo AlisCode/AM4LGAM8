@@ -6,7 +6,7 @@ use bevy::{
 
 use crate::{
     assets::GameAssets,
-    bundles::tile::spawn_tile_type_bundle,
+    bundles::{explosion::ExplosionBundle, tile::spawn_tile_type_bundle},
     constants::{GRID_SIZE, TILE_SIZE},
     game::{
         grid::{GridCoordinates, MoveTileEvent, TileGrid},
@@ -176,6 +176,7 @@ pub fn handle_explosion_events(
     query: Query<(Entity, &GridCoordinates, &TileType)>,
     mut tile_grid: ResMut<TileGrid>,
     mut game_score: ResMut<GameScore>,
+    assets: Res<GameAssets>,
 ) {
     let mut grid_coords_to_delete: HashSet<GridCoordinates> = HashSet::default();
     let mut events = Vec::default();
@@ -186,6 +187,7 @@ pub fn handle_explosion_events(
     }
     tile_grid.handle_explosion_events(events.iter());
 
+    let assets = &*assets;
     for (entity, coords, tile_type) in query.iter() {
         if !grid_coords_to_delete.contains(coords) {
             continue;
@@ -195,7 +197,7 @@ pub fn handle_explosion_events(
             ExplosionResult::NoExplosion => continue,
             ExplosionResult::ScorePoints(points) => {
                 game_score.add(points);
-
+                commands.spawn(ExplosionBundle::new(&assets, coords.clone()));
                 // TODO: Animate
                 commands.add(Despawn { entity });
             }

@@ -73,6 +73,7 @@ impl GamePlugin {
             handle_valid_move_events,
             handle_valid_turn,
             systems::ui::update_ui,
+            systems::explosion::animate_explosion,
         )
             .run_if(in_state(GameState::Playing));
         app.add_systems(Update, update_systems);
