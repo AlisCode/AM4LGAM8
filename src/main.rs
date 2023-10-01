@@ -25,6 +25,7 @@ fn main() {
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         resolution: (GAME_WINDOW_WIDTH, GAME_WINDOW_HEIGHT).into(),
+                        canvas: Some("#bevy".to_string()),
                         ..Default::default()
                     }),
                     ..Default::default()
