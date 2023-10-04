@@ -1,7 +1,7 @@
 use bevy::prelude::Event;
 
 use super::{
-    grid::{GridCoordinates, TileGrid},
+    grid::{GridCoordinates, MoveTileEvent, TileGrid},
     tile::{CombinationResult, TileType},
 };
 
@@ -26,16 +26,16 @@ pub struct ExplosionEvent {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct ValidEvents {
-    pub moves: Vec<ValidMoveEvent>,
-    pub merges: Vec<MergeTilesEvent>,
-    pub explosions: Vec<ExplosionEvent>,
+pub enum ValidEvent {
+    Move(MoveTileEvent),
+    Merge(MergeTilesEvent),
+    Explosions(ExplosionEvent),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ValidatedEventQueue {
     InvalidMove,
-    ValidMove(ValidEvents),
+    ValidMove(Vec<ValidEvent>),
 }
 
 // Domain
@@ -66,16 +66,19 @@ pub enum MoveDirection {
 }
 
 impl ValidatedEventQueue {
+    pub fn valid_move_set(mut events: Vec<ValidEvent>) -> Self {
+        events.reverse();
+        ValidatedEventQueue::ValidMove(events)
+    }
+
     pub fn validate_move(
         tile_grid: &TileGrid,
+        // TODO:
+        // coords: GridCoordinates,
         candidate_coords: Vec<GridCoordinates>,
         move_direction: MoveDirection,
     ) -> Self {
-        let mut valid_events = ValidEvents {
-            moves: Vec::default(),
-            merges: Vec::default(),
-            explosions: Vec::default(),
-        };
+        let mut valid_events = Vec::default();
         for coords in candidate_coords {
             match tile_grid.get(&coords) {
                 Some(tile_type) => match tile_type {
@@ -90,41 +93,41 @@ impl ValidatedEventQueue {
                     let target = coords.coords_after_move(move_direction);
                     match result {
                         CombinationResult::MergeTilesInto(resulting_type) => {
-                            valid_events.merges.push(MergeTilesEvent {
+                            valid_events.push(ValidEvent::Merge(MergeTilesEvent {
                                 source: coords,
                                 target,
                                 resulting_type: Some(resulting_type),
-                            });
+                            }));
                         }
                         CombinationResult::Explosion => {
                             valid_events
-                                .explosions
-                                .push(ExplosionEvent { target: coords });
-                            valid_events.explosions.push(ExplosionEvent { target });
+                                .push(ValidEvent::Explosions(ExplosionEvent { target: coords }));
+                            valid_events.push(ValidEvent::Explosions(ExplosionEvent { target }));
                         }
                     }
-                    return ValidatedEventQueue::ValidMove(valid_events);
+                    return ValidatedEventQueue::valid_move_set(valid_events);
                 }
                 CanCombineResult::No => {
                     let can_move_result = tile_grid.can_move_tile(&coords, move_direction);
                     match can_move_result {
                         CanMoveResult::Yes => {
-                            let valid_move_event = ValidMoveEvent {
-                                coords,
-                                move_direction,
-                            };
-                            valid_events.moves.push(valid_move_event);
-                            return ValidatedEventQueue::ValidMove(valid_events);
+                            let target = coords.coords_after_move(move_direction);
+                            valid_events.push(ValidEvent::Move(MoveTileEvent {
+                                source: coords,
+                                target,
+                            }));
+                            return ValidatedEventQueue::valid_move_set(valid_events);
                         }
                         CanMoveResult::No => return ValidatedEventQueue::InvalidMove,
                         CanMoveResult::YesIfNextCanMove => {
                             // Otherwise we add the valid Move event and keep checking the
                             // move with the next candidate
-                            let valid_move_event = ValidMoveEvent {
-                                coords,
-                                move_direction,
+                            let target = coords.coords_after_move(move_direction);
+                            let valid_move_event = MoveTileEvent {
+                                source: coords,
+                                target,
                             };
-                            valid_events.moves.push(valid_move_event);
+                            valid_events.push(ValidEvent::Move(valid_move_event));
                         }
                     }
                 }
@@ -139,7 +142,7 @@ impl ValidatedEventQueue {
 pub mod tests {
     use crate::game::{
         grid::{GridCoordinates, MoveTileEvent, TileGrid},
-        moves::{ExplosionEvent, MoveDirection, ValidEvents, ValidMoveEvent, ValidatedEventQueue},
+        moves::{ExplosionEvent, MergeTilesEvent, MoveDirection, ValidEvent, ValidatedEventQueue},
         tile::{CoinValue, TileType},
     };
 
@@ -220,25 +223,34 @@ pub mod tests {
         );
         assert_eq!(
             &validated_event_queue,
-            &ValidatedEventQueue::ValidMove(ValidEvents {
-                moves: vec![
-                    ValidMoveEvent {
-                        move_direction: MoveDirection::Right,
-                        coords: GridCoordinates { x: 0, y: 0 },
-                    },
-                    ValidMoveEvent {
-                        move_direction: MoveDirection::Right,
-                        coords: GridCoordinates { x: 1, y: 0 },
-                    }
-                ],
-                merges: vec![],
-                explosions: vec![],
-            }),
+            &ValidatedEventQueue::ValidMove(vec![
+                ValidEvent::Move(MoveTileEvent {
+                    source: GridCoordinates { x: 1, y: 0 },
+                    target: GridCoordinates { x: 2, y: 0 },
+                }),
+                ValidEvent::Move(MoveTileEvent {
+                    source: GridCoordinates { x: 0, y: 0 },
+                    target: GridCoordinates { x: 1, y: 0 },
+                }),
+            ],)
         );
     }
 
-    // TODO: Test merges
-    // TODO: Test explosions
+    #[test]
+    fn should_return_that_move_is_invalid() {
+        let mut tile_grid = TileGrid::default();
+        tile_grid.insert(GridCoordinates { x: -1, y: 0 }, TileType::Wall);
+        tile_grid.insert(GridCoordinates { x: 0, y: 0 }, TileType::Bomb);
+        tile_grid.insert(
+            GridCoordinates { x: 1, y: 0 },
+            TileType::Coin(CoinValue::One),
+        );
+        let coords = GridCoordinates { x: 1, y: 0 }.candidate_coords_for_dir(MoveDirection::Left);
+        let invalid_move =
+            ValidatedEventQueue::validate_move(&tile_grid, coords, MoveDirection::Left);
+        assert_eq!(invalid_move, ValidatedEventQueue::InvalidMove);
+    }
+
     #[test]
     fn should_push_to_explode_tiles() {
         let mut tile_grid = TileGrid::default();
@@ -254,21 +266,82 @@ pub mod tests {
             ValidatedEventQueue::validate_move(&tile_grid, coords, MoveDirection::Left);
         assert_eq!(
             validated_event_queue,
-            ValidatedEventQueue::ValidMove(ValidEvents {
-                moves: vec![ValidMoveEvent {
-                    coords: GridCoordinates { x: 2, y: 0 },
-                    move_direction: MoveDirection::Left,
-                }],
-                merges: vec![],
-                explosions: vec![
-                    ExplosionEvent {
-                        target: GridCoordinates { x: 1, y: 0 }
-                    },
-                    ExplosionEvent {
-                        target: GridCoordinates { x: 0, y: 0 }
-                    }
-                ],
-            })
+            ValidatedEventQueue::ValidMove(vec![
+                ValidEvent::Explosions(ExplosionEvent {
+                    target: GridCoordinates { x: 0, y: 0 }
+                }),
+                ValidEvent::Explosions(ExplosionEvent {
+                    target: GridCoordinates { x: 1, y: 0 }
+                }),
+                ValidEvent::Move(MoveTileEvent {
+                    source: GridCoordinates { x: 2, y: 0 },
+                    target: GridCoordinates { x: 1, y: 0 },
+                }),
+            ])
+        );
+    }
+
+    #[test]
+    fn should_push_to_merge_tiles_right() {
+        let mut tile_grid = TileGrid::default();
+        tile_grid.insert(GridCoordinates { x: 0, y: 0 }, TileType::Bomb);
+        tile_grid.insert(
+            GridCoordinates { x: 1, y: 0 },
+            TileType::Coin(CoinValue::One),
+        );
+        tile_grid.insert(
+            GridCoordinates { x: 2, y: 0 },
+            TileType::Coin(CoinValue::One),
+        );
+
+        let coords = GridCoordinates { x: 0, y: 0 }.candidate_coords_for_dir(MoveDirection::Right);
+        let validated_event_queue =
+            ValidatedEventQueue::validate_move(&tile_grid, coords, MoveDirection::Right);
+        assert_eq!(
+            validated_event_queue,
+            ValidatedEventQueue::ValidMove(vec![
+                ValidEvent::Merge(MergeTilesEvent {
+                    source: GridCoordinates { x: 1, y: 0 },
+                    target: GridCoordinates { x: 2, y: 0 },
+                    resulting_type: Some(TileType::Coin(CoinValue::Two)),
+                }),
+                ValidEvent::Move(MoveTileEvent {
+                    source: GridCoordinates { x: 0, y: 0 },
+                    target: GridCoordinates { x: 1, y: 0 },
+                }),
+            ])
+        );
+    }
+
+    #[test]
+    fn should_push_to_merge_tiles_left() {
+        let mut tile_grid = TileGrid::default();
+        tile_grid.insert(GridCoordinates { x: 2, y: 0 }, TileType::Bomb);
+        tile_grid.insert(
+            GridCoordinates { x: 1, y: 0 },
+            TileType::Coin(CoinValue::One),
+        );
+        tile_grid.insert(
+            GridCoordinates { x: 0, y: 0 },
+            TileType::Coin(CoinValue::One),
+        );
+
+        let coords = GridCoordinates { x: 2, y: 0 }.candidate_coords_for_dir(MoveDirection::Left);
+        let validated_event_queue =
+            ValidatedEventQueue::validate_move(&tile_grid, coords, MoveDirection::Left);
+        assert_eq!(
+            validated_event_queue,
+            ValidatedEventQueue::ValidMove(vec![
+                ValidEvent::Merge(MergeTilesEvent {
+                    source: GridCoordinates { x: 1, y: 0 },
+                    target: GridCoordinates { x: 0, y: 0 },
+                    resulting_type: Some(TileType::Coin(CoinValue::Two)),
+                }),
+                ValidEvent::Move(MoveTileEvent {
+                    source: GridCoordinates { x: 2, y: 0 },
+                    target: GridCoordinates { x: 1, y: 0 },
+                }),
+            ])
         );
     }
 }

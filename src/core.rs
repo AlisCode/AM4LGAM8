@@ -6,7 +6,9 @@ use crate::{
     },
     systems::{self, grid::ValidTurnEvent, movables::RequestMoveEvent, ui::GameScore},
 };
-use bevy::prelude::{in_state, App, IntoSystemConfigs, OnEnter, Plugin, PreUpdate, States, Update};
+use bevy::prelude::{
+    in_state, App, IntoSystemConfigs, OnEnter, Plugin, PostUpdate, PreUpdate, States, Update,
+};
 use bevy_asset_loader::loading_state::{LoadingState, LoadingStateAppExt};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, States)]
@@ -84,30 +86,34 @@ impl GamePlugin {
         // Pre-Update
         app.add_systems(
             PreUpdate,
-            systems::grid::sync_tile_grid.run_if(in_state(GameState::Playing)),
+            systems::grid::check_for_game_over.run_if(in_state(GameState::Playing)),
         );
 
         // Update
-        let handle_explosion_events =
-            systems::tiles::handle_explosion_events.after(systems::tiles::handle_combine_events);
-        let handle_combine_events =
-            systems::tiles::handle_combine_events.after(systems::tiles::handle_valid_move_events);
-        let handle_valid_move_events = systems::tiles::handle_valid_move_events;
-        let handle_valid_turn =
-            systems::grid::spawn_new_tile_on_valid_move.after(handle_valid_move_events);
+        let handle_explosion_events = systems::tiles::handle_explosion_events
+            .after(systems::tiles::handle_requested_move_events);
+        let handle_combine_events = systems::tiles::handle_combine_events
+            .after(systems::tiles::handle_requested_move_events);
+        let handle_valid_move_events = systems::tiles::handle_valid_move_events
+            .after(systems::tiles::handle_requested_move_events);
 
         let update_systems = (
             systems::tiles::handle_requested_move_events,
             handle_explosion_events,
             handle_combine_events,
             handle_valid_move_events,
-            handle_valid_turn,
             systems::ui::update_ui,
             systems::explosion::animate_explosion,
             systems::marked_for_deletion::tick_marked_for_deletion,
         )
             .run_if(in_state(GameState::Playing));
         app.add_systems(Update, update_systems);
+
+        // Post-update
+        app.add_systems(
+            PostUpdate,
+            systems::grid::spawn_new_tile_on_valid_move.run_if(in_state(GameState::Playing)),
+        );
     }
 }
 

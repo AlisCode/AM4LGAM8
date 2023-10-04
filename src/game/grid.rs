@@ -7,8 +7,10 @@ use rand::Rng;
 use crate::{constants::GRID_SIZE, game::moves::ValidatedEventQueue};
 
 use super::{
-    moves::{CanCombineResult, CanMoveResult, ExplosionEvent, MergeTilesEvent, MoveDirection},
-    tile::{ExplosionResult, TileType},
+    moves::{
+        CanCombineResult, CanMoveResult, ExplosionEvent, MergeTilesEvent, MoveDirection, ValidEvent,
+    },
+    tile::{CoinValue, ExplosionResult, TileType},
 };
 
 // Components
@@ -62,7 +64,7 @@ impl GridCoordinates {
 
 // Events
 
-#[derive(Debug, Event)]
+#[derive(Debug, PartialEq, Eq, Clone, Event)]
 pub struct MoveTileEvent {
     pub source: GridCoordinates,
     pub target: GridCoordinates,
@@ -118,6 +120,23 @@ impl TileGrid {
         CanCombineResult::No
     }
 
+    pub fn apply_events(&mut self, events: &Vec<ValidEvent>) {
+        for event in events {
+            match event {
+                ValidEvent::Move(e) => self.handle_move_tile_event(e),
+                ValidEvent::Merge(e) => self.handle_combine_event(e),
+                ValidEvent::Explosions(e) => self.handle_explosion_event(e),
+            }
+        }
+    }
+
+    pub fn handle_move_tile_event(&mut self, event: &MoveTileEvent) {
+        if let Some(tile_type) = self.grid.remove(&event.source) {
+            self.insert(event.target.clone(), tile_type);
+        }
+        self.unused_coordinates.insert(event.source.clone());
+    }
+
     pub fn handle_move_tile_events<'a, I: Iterator<Item = &'a MoveTileEvent>>(
         &mut self,
         events: I,
@@ -135,6 +154,19 @@ impl TileGrid {
         for (coord, new_type) in new_tiles {
             self.insert(coord, new_type);
         }
+    }
+
+    pub fn handle_combine_event(&mut self, event: &MergeTilesEvent) {
+        let MergeTilesEvent {
+            source,
+            target,
+            resulting_type,
+        } = event;
+        self.grid.remove(source);
+        self.grid.remove(target);
+        self.unused_coordinates.insert(source.clone());
+        self.unused_coordinates.insert(target.clone());
+        self.maybe_insert(target.clone(), *resulting_type);
     }
 
     pub fn handle_combine_events<'a, I: Iterator<Item = &'a MergeTilesEvent>>(
@@ -163,6 +195,21 @@ impl TileGrid {
         }
     }
 
+    pub fn handle_explosion_event(&mut self, event: &ExplosionEvent) {
+        let ExplosionEvent { target } = event;
+        for coord in target.explosion_radius() {
+            if let Some(tile) = self.get(&coord) {
+                match tile.explosion_result() {
+                    ExplosionResult::NoExplosion => (),
+                    ExplosionResult::ScorePoints(_) => {
+                        self.unused_coordinates.insert(coord.clone());
+                        self.grid.remove(&coord);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn handle_explosion_events<'a, I: Iterator<Item = &'a ExplosionEvent>>(
         &mut self,
         events: I,
@@ -183,7 +230,7 @@ impl TileGrid {
         }
     }
 
-    pub fn get_unused_coordinate(&self) -> Option<GridCoordinates> {
+    fn get_unused_coordinate(&self) -> Option<GridCoordinates> {
         // Quick and hacky way to get an element from a set
         // I don't have a better idea rn
         if self.unused_coordinates.is_empty() {
@@ -241,6 +288,63 @@ impl TileGrid {
     pub fn has_unused_coordinates(&self) -> bool {
         !self.unused_coordinates.is_empty()
     }
+
+    pub fn try_spawn_new_tile(&mut self) -> Option<SpawnEvent> {
+        let coords = self.get_unused_coordinate()?;
+        let tile_type = TileType::gen_random();
+        self.insert(coords.clone(), tile_type);
+        Some(SpawnEvent { coords, tile_type })
+    }
+
+    pub fn spawn_first_tile(&mut self) -> Option<SpawnEvent> {
+        let coords = self.get_unused_coordinate()?;
+        let tile_type = TileType::Coin(CoinValue::One);
+        self.insert(coords.clone(), tile_type);
+        Some(SpawnEvent { coords, tile_type })
+    }
+
+    pub fn setup_default_grid(&mut self) -> Vec<SpawnEvent> {
+        let mut spawn_events = Vec::default();
+        for x in -1..=GRID_SIZE {
+            let tile_type = TileType::Wall;
+            let coords_bottom = GridCoordinates { x, y: -1 };
+            self.insert(coords_bottom.clone(), tile_type);
+            spawn_events.push(SpawnEvent {
+                coords: coords_bottom,
+                tile_type,
+            });
+
+            let coords_top = GridCoordinates { x, y: GRID_SIZE };
+            self.insert(coords_top.clone(), tile_type);
+            spawn_events.push(SpawnEvent {
+                coords: coords_top,
+                tile_type,
+            });
+        }
+        for y in -1..=GRID_SIZE {
+            let tile_type = TileType::Wall;
+            let coords_left = GridCoordinates { x: -1, y };
+            self.insert(coords_left.clone(), tile_type);
+            spawn_events.push(SpawnEvent {
+                coords: coords_left,
+                tile_type,
+            });
+
+            let coords_right = GridCoordinates { x: GRID_SIZE, y };
+            self.insert(coords_right.clone(), tile_type);
+            spawn_events.push(SpawnEvent {
+                coords: coords_right,
+                tile_type,
+            });
+        }
+
+        spawn_events
+    }
+}
+
+pub struct SpawnEvent {
+    pub coords: GridCoordinates,
+    pub tile_type: TileType,
 }
 
 #[cfg(test)]
@@ -403,10 +507,9 @@ pub mod tests {
             TileType::Coin(CoinValue::Two),
         );
 
-        let events = vec![ExplosionEvent {
+        tile_grid.handle_explosion_event(&ExplosionEvent {
             target: GridCoordinates { x: 0, y: 0 },
-        }];
-        tile_grid.handle_explosion_events(events.iter());
+        });
 
         assert_eq!(
             tile_grid.get(&GridCoordinates { x: -1, y: 0 }),
@@ -490,12 +593,11 @@ pub mod tests {
         );
 
         // Combine tiles 1,0 and 2,0 in 2,0
-        let events = vec![MergeTilesEvent {
+        tile_grid.handle_combine_event(&MergeTilesEvent {
             source: GridCoordinates { x: 1, y: 0 },
             target: GridCoordinates { x: 2, y: 0 },
             resulting_type: Some(TileType::Coin(CoinValue::Two)),
-        }];
-        tile_grid.handle_combine_events(events.iter());
+        });
         assert!(tile_grid
             .unused_coordinates
             .contains(&GridCoordinates { x: 1, y: 0 }));
@@ -525,10 +627,9 @@ pub mod tests {
         );
 
         // Combine tiles 1,0 and 2,0 in 2,0
-        let events = vec![ExplosionEvent {
+        tile_grid.handle_explosion_event(&ExplosionEvent {
             target: GridCoordinates { x: 2, y: 0 },
-        }];
-        tile_grid.handle_explosion_events(events.iter());
+        });
         assert!(tile_grid
             .unused_coordinates
             .contains(&GridCoordinates { x: 1, y: 0 }));

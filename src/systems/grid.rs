@@ -1,57 +1,43 @@
 use bevy::prelude::{
-    Added, Commands, DespawnRecursive, Entity, Event, EventReader, EventWriter, NextState, Query,
-    Res, ResMut,
+    Commands, DespawnRecursive, Entity, Event, EventReader, EventWriter, NextState, Query, Res,
+    ResMut,
 };
 
 use crate::{
     assets::GameAssets,
     bundles::tile::spawn_tile_type_bundle,
-    constants::GRID_SIZE,
     core::GameState,
-    game::{
-        grid::{GridCoordinates, TileGrid},
-        tile::{CoinValue, TileType},
-    },
+    game::grid::{SpawnEvent, TileGrid},
 };
 
 use super::OnPlayingScreen;
 
-pub fn setup_grid(mut commands: Commands, assets: Res<GameAssets>) {
-    for x in -1..=GRID_SIZE {
-        spawn_tile_type_bundle(&mut commands, assets.tileset.clone(), TileType::Wall, x, -1);
+pub fn setup_grid(
+    mut commands: Commands,
+    assets: Res<GameAssets>,
+    mut tile_grid: ResMut<TileGrid>,
+) {
+    let spawn_events = tile_grid.setup_default_grid();
+
+    for SpawnEvent { coords, tile_type } in spawn_events {
         spawn_tile_type_bundle(
             &mut commands,
             assets.tileset.clone(),
-            TileType::Wall,
-            x,
-            GRID_SIZE,
-        );
-    }
-    for y in -1..=GRID_SIZE {
-        spawn_tile_type_bundle(&mut commands, assets.tileset.clone(), TileType::Wall, -1, y);
-        spawn_tile_type_bundle(
-            &mut commands,
-            assets.tileset.clone(),
-            TileType::Wall,
-            GRID_SIZE,
-            y,
+            tile_type,
+            coords.x,
+            coords.y,
         );
     }
 }
 
-pub fn sync_tile_grid(
+pub fn check_for_game_over(
     mut commands: Commands,
     all_entities_on_screen: Query<(Entity, &OnPlayingScreen)>,
     mut tile_grid: ResMut<TileGrid>,
-    newly_spawned_tiles: Query<(&TileType, &GridCoordinates), Added<GridCoordinates>>,
     mut next_state: ResMut<NextState<GameState>>,
     mut valid_turn_event_tx: EventWriter<ValidTurnEvent>,
 ) {
-    for (tile_type, coords) in newly_spawned_tiles.iter() {
-        tile_grid.insert(coords.clone(), *tile_type);
-    }
-
-    // It is game over
+    // Check for game over
     if !tile_grid.has_any_possible_moves() {
         // Unless we still do have unused coordinates, in which case we can trigger the spawn of a
         // new tile
@@ -74,33 +60,40 @@ pub struct ValidTurnEvent;
 pub fn spawn_new_tile_on_valid_move(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
-    tile_grid: Res<TileGrid>,
+    mut tile_grid: ResMut<TileGrid>,
     mut valid_turn_event_rx: EventReader<ValidTurnEvent>,
 ) {
     for _ in valid_turn_event_rx.iter() {
-        let maybe_unused_coordinate = tile_grid.get_unused_coordinate();
+        let maybe_spawn_event = tile_grid.try_spawn_new_tile();
 
-        match maybe_unused_coordinate {
-            Some(unused_coord) => {
+        match maybe_spawn_event {
+            Some(SpawnEvent { coords, tile_type }) => {
                 spawn_tile_type_bundle(
                     &mut commands,
                     game_assets.tileset.clone(),
-                    TileType::gen_random(),
-                    unused_coord.x,
-                    unused_coord.y,
+                    tile_type,
+                    coords.x,
+                    coords.y,
                 );
             }
-            None => panic!("No coordinates to spawn a tile on. This is bug."),
+            None => panic!("No coordinates to spawn a tile on. This is a bug."),
         }
     }
 }
 
-pub fn spawn_first_tile(mut commands: Commands, game_assets: Res<GameAssets>) {
+pub fn spawn_first_tile(
+    mut commands: Commands,
+    game_assets: Res<GameAssets>,
+    mut tile_grid: ResMut<TileGrid>,
+) {
+    let SpawnEvent { coords, tile_type } = tile_grid
+        .spawn_first_tile()
+        .expect("Failed to spawn first tile. This is a bug.");
     spawn_tile_type_bundle(
         &mut commands,
         game_assets.tileset.clone(),
-        TileType::Coin(CoinValue::One),
-        1,
-        1,
+        tile_type,
+        coords.x,
+        coords.y,
     );
 }
