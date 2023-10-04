@@ -30,3 +30,10 @@ For the plugins used, have a look inside `main.rs`. There are a couple of intere
 together from a Github thread.
 
 The UI is mostly just handplaced sprites to decorate a bit.
+
+# Changelog
+
+01/10/2023: Initial release for LD #54
+04/10/2023: Various bug fixes
+* It is now impossible for a tile to spawn under another one that has just been moved
+* Tiles now correctly merge with each other when getting pushed
