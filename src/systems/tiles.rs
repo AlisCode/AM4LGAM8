@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use bevy::{
-    ecs::system::Despawn,
     prelude::{Commands, Entity, EventReader, EventWriter, Query, Res, ResMut, Transform},
     time::{Timer, TimerMode},
     utils::{HashMap, HashSet},
@@ -95,51 +94,40 @@ pub fn handle_combine_events(
     query: Query<(Entity, &GridCoordinates, &Transform)>,
     assets: Res<GameAssets>,
 ) {
-    let mut grid_coords_to_new_coords: HashMap<GridCoordinates, GridCoordinates> =
-        HashMap::default();
-    let mut tiles_to_spawn: Vec<(GridCoordinates, TileType)> = Vec::default();
-    let mut events: Vec<_> = Vec::default();
     for event in combine_event_rx.iter() {
-        events.push(event.clone());
         let MergeTilesEvent {
             source,
             target,
             resulting_type,
         } = event;
-        grid_coords_to_new_coords.insert(source.clone(), target.clone());
-        grid_coords_to_new_coords.insert(target.clone(), target.clone());
-        if let Some(tile_type) = resulting_type {
-            tiles_to_spawn.push((target.clone(), tile_type.clone()));
-        }
-    }
 
-    // Play the animation to combine the tiles
-    for (entity, grid_coords, transform) in query.iter() {
-        if let Some(new_coords) = grid_coords_to_new_coords.get(grid_coords) {
-            if grid_coords == new_coords {
-                // TODO: Animate fusion ?
-                commands.add(Despawn { entity })
-            } else {
+        for (entity, grid_coords, transform) in query.iter() {
+            if grid_coords == source {
                 add_movement_animation(
                     &mut commands,
                     entity,
                     transform,
-                    new_coords.clone(),
+                    target.clone(),
                     AndDeleteAfter::Yes,
                 );
             }
+            if grid_coords == target {
+                commands.entity(entity).insert(MarkedForDeletion(Timer::new(
+                    Duration::from_secs_f32(0.1),
+                    TimerMode::Once,
+                )));
+            }
         }
-    }
 
-    // Spawn tiles issued from combinations
-    for (coords, tile_type) in tiles_to_spawn {
-        spawn_tile_type_bundle(
-            &mut commands,
-            assets.tileset.clone(),
-            tile_type,
-            coords.x,
-            coords.y,
-        );
+        if let Some(tile_type) = resulting_type {
+            spawn_tile_type_bundle(
+                &mut commands,
+                assets.tileset.clone(),
+                *tile_type,
+                target.x,
+                target.y,
+            );
+        }
     }
 }
 

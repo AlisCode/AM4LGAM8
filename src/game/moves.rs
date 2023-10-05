@@ -344,4 +344,51 @@ pub mod tests {
             ])
         );
     }
+
+    #[test]
+    fn should_merge_and_move_bombs() {
+        let mut tile_grid = TileGrid::default();
+        tile_grid.insert(GridCoordinates { x: -1, y: 0 }, TileType::Wall);
+        tile_grid.insert(
+            GridCoordinates { x: 1, y: 0 },
+            TileType::Coin(CoinValue::Two),
+        );
+        tile_grid.insert(
+            GridCoordinates { x: 2, y: 0 },
+            TileType::Coin(CoinValue::Two),
+        );
+        tile_grid.insert(GridCoordinates { x: 3, y: 0 }, TileType::Bomb);
+        let coords = GridCoordinates { x: 3, y: 0 }.candidate_coords_for_dir(MoveDirection::Left);
+        let validated_event_queue =
+            ValidatedEventQueue::validate_move(&tile_grid, coords, MoveDirection::Left);
+        let expected_events = vec![
+            ValidEvent::Merge(MergeTilesEvent {
+                source: GridCoordinates { x: 2, y: 0 },
+                target: GridCoordinates { x: 1, y: 0 },
+                resulting_type: Some(TileType::Coin(CoinValue::Four)),
+            }),
+            ValidEvent::Move(MoveTileEvent {
+                source: GridCoordinates { x: 3, y: 0 },
+                target: GridCoordinates { x: 2, y: 0 },
+            }),
+        ];
+        tile_grid.apply_events(&expected_events);
+        assert_eq!(
+            validated_event_queue,
+            ValidatedEventQueue::ValidMove(expected_events)
+        );
+
+        assert_eq!(
+            tile_grid.get(&GridCoordinates { x: -1, y: 0 }),
+            Some(&TileType::Wall)
+        );
+        assert_eq!(
+            tile_grid.get(&GridCoordinates { x: 1, y: 0 }),
+            Some(&TileType::Coin(CoinValue::Four))
+        );
+        assert_eq!(
+            tile_grid.get(&GridCoordinates { x: 2, y: 0 }),
+            Some(&TileType::Bomb)
+        );
+    }
 }
